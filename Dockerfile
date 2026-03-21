@@ -15,4 +15,4 @@ COPY --from=builder /app/mirahub-app .
 COPY wait-for-db.sh .
 RUN chmod +x wait-for-db.sh
 EXPOSE 8080
-CMD ["./wait-for-db.sh", "db", "./mirahub-app"]
+CMD ["sh", "-c", "./wait-for-db.sh $DB_HOST ./mirahub-app"]

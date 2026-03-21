@@ -26,6 +26,7 @@ services:
       DB_PORT: 5432
     depends_on:
       - db
+    command: ["sh", "-c", "./wait-for-db.sh $DB_HOST ./mirahub-app"]
 
 volumes:
   db_data:

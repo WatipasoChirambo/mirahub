@@ -1,15 +1,17 @@
 #!/bin/sh
-# wait-for-db.sh: wait until Postgres is ready
-
+# wait-for-db.sh
 set -e
 
-host="$1"
+host="${1:-localhost}"  # default to localhost if not provided
 shift
 cmd="$@"
 
-until pg_isready -h "$host" -p 5432 -U "mirahub" >/dev/null 2>&1; do
+echo "Waiting for database at $host..."
+
+until pg_isready -h "$host" -p "${DB_PORT:-5432}" -U "$DB_USER"; do
   echo "Waiting for database at $host..."
   sleep 2
 done
 
+echo "Database is ready. Starting app..."
 exec $cmd
