@@ -6,7 +6,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o mirahub-app main.go
+RUN go build -o mirahub-app .
 
 FROM alpine:latest
 RUN apk add --no-cache postgresql-client bash
