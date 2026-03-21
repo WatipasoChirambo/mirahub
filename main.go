@@ -41,7 +41,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	// Create a wrapper to inject DB into Gin context
+
 	r.Use(func(c *gin.Context) {
 		c.Set("db", db.DB) // if using sqlx, db.DB is *sql.DB
 		c.Next()
