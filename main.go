@@ -14,11 +14,11 @@ import (
 )
 
 func main() {
-	dbHost := os.Getenv("DB_HOST")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
-	dbPort := os.Getenv("DB_PORT")
+	// dbHost := os.Getenv("DB_HOST")
+	// dbUser := os.Getenv("DB_USER")
+	// dbPassword := os.Getenv("DB_PASSWORD")
+	// dbName := os.Getenv("DB_NAME")
+	// dbPort := os.Getenv("DB_PORT")
 
 	dsn := os.Getenv("DATABASE_URL")
 
