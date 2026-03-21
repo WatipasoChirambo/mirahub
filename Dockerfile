@@ -3,6 +3,7 @@ FROM golang:1.22-alpine AS builder
 RUN apk add --no-cache bash
 
 WORKDIR /app
+RUN go mod tidy
 COPY go.mod go.sum ./
 RUN go mod download
 
