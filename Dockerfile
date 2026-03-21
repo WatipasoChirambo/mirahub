@@ -11,7 +11,7 @@ RUN go build -o mirahub-app .
 FROM alpine:latest
 RUN apk add --no-cache postgresql-client bash
 WORKDIR /root/
-COPY --from=builder /app/mirahub-app .
+COPY --from=builder /app/mirahub-app main.go
 COPY wait-for-db.sh .
 RUN chmod +x wait-for-db.sh
 EXPOSE 8080
