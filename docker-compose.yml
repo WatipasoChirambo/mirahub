@@ -1,0 +1,31 @@
+
+services:
+  db:
+    image: postgres:15
+    container_name: mirahub_db
+    environment:
+      POSTGRES_USER: mirahub
+      POSTGRES_PASSWORD: mirahub123
+      POSTGRES_DB: mirahub
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/migrations.sql:/docker-entrypoint-initdb.d/migrations.sql
+
+  app:
+    build: .
+    container_name: mirahub_app
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_USER: mirahub
+      DB_PASSWORD: mirahub123
+      DB_NAME: mirahub
+      DB_PORT: 5432
+    depends_on:
+      - db
+
+volumes:
+  db_data:
