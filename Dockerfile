@@ -1,18 +1,20 @@
-FROM golang:1.26-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
-RUN apk add --no-cache postgresql-client bash
+RUN apk add --no-cache bash
 
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
+
 COPY . .
 RUN go build -o mirahub-app .
 
 FROM alpine:latest
-RUN apk add --no-cache postgresql-client bash
+RUN apk add --no-cache bash
+
 WORKDIR /root/
-COPY --from=builder /app/mirahub-app main.go
-COPY wait-for-db.sh .
-RUN chmod +x wait-for-db.sh
+COPY --from=builder /app/mirahub-app ./mirahub-app
+
 EXPOSE 8080
-CMD ["sh", "-c", "./wait-for-db.sh $DB_HOST ./mirahub-app"]
+
+CMD ["./mirahub-app"]
