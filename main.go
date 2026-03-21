@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"mirahub/routes"
 	"os"
@@ -14,31 +13,25 @@ import (
 )
 
 func main() {
-	// dbHost := os.Getenv("DB_HOST")
-	// dbUser := os.Getenv("DB_USER")
-	// dbPassword := os.Getenv("DB_PASSWORD")
-	// dbName := os.Getenv("DB_NAME")
-	// dbPort := os.Getenv("DB_PORT")
-
 	dsn := os.Getenv("DATABASE_URL")
 
-db, err := sqlx.Connect("postgres", dsn)
-if err != nil {
-    log.Fatal("Database connection failed:", err)
-}
+	if dsn == "" {
+		log.Fatal("DATABASE_URL is not set")
+	}
 
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
 	}
 	defer db.Close()
+
 	log.Println("Connected to DB")
 
 	r := gin.Default()
 
 	// CORS config
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"}, // your Nuxt dev URL
+		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -47,9 +40,16 @@ if err != nil {
 	}))
 
 	r.Use(func(c *gin.Context) {
-		c.Set("db", db.DB) // if using sqlx, db.DB is *sql.DB
+		c.Set("db", db.DB)
 		c.Next()
 	})
+
 	routes.SetupRoutes(r)
-	r.Run(":8080")
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	r.Run(":" + port)
 }
