@@ -7,25 +7,22 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
-	// -------------------- Public routes --------------------
 	public := r.Group("/api")
 	{
 		public.POST("/auth/register", handlers.Register)
 		public.POST("/auth/login", handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 
-		// Optionally, public GETs for categories, products, warehouses, suppliers
 		public.GET("/products", handlers.GetProducts)
 		public.GET("/categories", handlers.GetCategories)
 		public.GET("/suppliers", handlers.GetSuppliers)
 		public.GET("/warehouses", handlers.GetWarehouses)
 	}
 
-	// -------------------- Authenticated routes --------------------
 	api := r.Group("/api")
 	api.Use(handlers.AuthMiddleware())
 	{
-		// Products (admin/user can create/update/delete)
+		//products
 		api.POST("/products", handlers.CreateProduct)
 		api.PUT("/products/:id", handlers.UpdateProduct)
 		api.DELETE("/products/:id", handlers.DeleteProduct)

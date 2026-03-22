@@ -40,7 +40,7 @@ type Product struct {
 	SupplierID  int    `db:"supplier_id" json:"supplier_id"`
 	WarehouseID int    `db:"warehouse_id" json:"warehouse_id"`
 	Stock       int    `db:"stock" json:"stock"`
-	CreatedBy   int    `db:"created_by" json:"created_by"` // links to User
+	CreatedBy   int    `db:"user_id" json:"user_id"` // links to User
 }
 
 // Sales
