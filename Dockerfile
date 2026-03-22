@@ -1,28 +1,34 @@
+# ---------- Builder stage ----------
 FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache bash
 
 WORKDIR /app
 
-# Copy module files first
+# Copy go mod files first (for caching dependencies)
 COPY go.mod go.sum ./
 
-# Tidy & download dependencies
-RUN go mod tidy
+# Download dependencies only (no tidy yet)
 RUN go mod download
 
-# Now copy the source code
+# Now copy the full source code
 COPY . .
+
+# Tidy AFTER code is present
+RUN go mod tidy
 
 # Build the binary
 RUN go build -o mirahub-app .
 
-# Minimal runtime image
+# ---------- Runtime stage ----------
 FROM alpine:latest
+
 RUN apk add --no-cache bash
 
 WORKDIR /root/
-COPY --from=builder /app/mirahub-app ./mirahub-app
+
+# Copy compiled binary
+COPY --from=builder /app/mirahub-app .
 
 EXPOSE 8080
 
