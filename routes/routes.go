@@ -20,7 +20,9 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 			handlers.SeedAll(c, db)
 		})
 
-		public.GET('/')
+		public.GET("/", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "Welcome to Mirahub API"})
+		})
 
 		// Wrap SeedProducts to pass db
 		public.POST("/seed-products", func(c *gin.Context) {
