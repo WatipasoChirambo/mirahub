@@ -4,14 +4,22 @@ import (
 	"mirahub/handlers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
 )
 
-func SetupRoutes(r *gin.Engine) {
+// SetupRoutes sets up all API routes
+func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
+	// Public routes
 	public := r.Group("/api")
 	{
 		public.POST("/auth/register", handlers.Register)
 		public.POST("/auth/login", handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
+
+		// Wrap SeedProducts to pass db
+		public.POST("/seed-products", func(c *gin.Context) {
+			handlers.SeedProducts(c, db)
+		})
 
 		public.GET("/products", handlers.GetProducts)
 		public.GET("/categories", handlers.GetCategories)
@@ -19,10 +27,11 @@ func SetupRoutes(r *gin.Engine) {
 		public.GET("/warehouses", handlers.GetWarehouses)
 	}
 
+	// Authenticated routes
 	api := r.Group("/api")
 	api.Use(handlers.AuthMiddleware())
 	{
-		//products
+		// Products
 		api.POST("/products", handlers.CreateProduct)
 		api.PUT("/products/:id", handlers.UpdateProduct)
 		api.DELETE("/products/:id", handlers.DeleteProduct)

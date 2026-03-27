@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jmoiron/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -17,39 +18,109 @@ import (
 
 // LoginRequest represents user login input
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Identifier string `json:"identifier"` // username, email, or phone
+	Password   string `json:"password"`
 }
 
 // RegisterRequest represents new user input
 type RegisterRequest struct {
 	Username string `json:"username"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
 	Password string `json:"password"`
 }
 
 // Register a new user
 func Register(c *gin.Context) {
 	var req RegisterRequest
+
+	// Validate JSON input
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
+	// Basic validation
+	if req.Username == "" || req.Password == "" || req.Email == "" || req.Phone == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, phone, and password are required"})
+		return
+	}
+
 	db := c.MustGet("db").(*sql.DB)
 
+	// Check if username, email, or phone already exists
+	var exists bool
+	err := db.QueryRow(
+		`SELECT EXISTS(
+			SELECT 1 FROM users WHERE username=$1 OR email=$2 OR phone=$3
+		)`,
+		req.Username, req.Email, req.Phone,
+	).Scan(&exists)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	if exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, or phone already exists"})
+		return
+	}
+
+	// Hash password
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not hash password"})
 		return
 	}
 
-	_, err = db.Exec("INSERT INTO users(username, password_hash, role) VALUES($1,$2,'user')", req.Username, string(hashed))
+	// Insert new user
+	_, err = db.Exec(
+		`INSERT INTO users(username, email, phone, password_hash, role)
+		 VALUES ($1,$2,$3,$4,$5)`,
+		req.Username,
+		req.Email,
+		req.Phone,
+		string(hashed),
+		"user",
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create user"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User created"})
+	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+}
+
+// SeedProducts creates 5 dummy products
+func SeedProducts(c *gin.Context, db *sqlx.DB) {
+	products := []models.Product{
+		{Code: "P001", Name: "Laptop", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 10, CreatedBy: 1},
+		{Code: "P002", Name: "Keyboard", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 15, CreatedBy: 1},
+		{Code: "P003", Name: "Mouse", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 20, CreatedBy: 1},
+		{Code: "P004", Name: "Monitor", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 5, CreatedBy: 1},
+		{Code: "P005", Name: "Printer", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 8, CreatedBy: 1},
+	}
+
+	tx := db.MustBegin()
+	for _, p := range products {
+		_, err := tx.Exec(`INSERT INTO products (code, name, category_id, supplier_id, warehouse_id, stock, created_by) 
+            VALUES ($1,$2,$3,$4,$5,$6,$7)
+            ON CONFLICT (code) DO NOTHING`,
+			p.Code, p.Name, p.CategoryID, p.SupplierID, p.WarehouseID, p.Stock, p.CreatedBy)
+		if err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "5 products seeded successfully!"})
 }
 
 // Login authenticates a user and returns a JWT
@@ -63,7 +134,7 @@ func Login(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
 	var user models.User
-	row := db.QueryRow("SELECT id, username, password_hash, role FROM users WHERE username=$1", req.Username)
+	row := db.QueryRow("SELECT id, username, password_hash, role FROM users WHERE username=$1", req.Identifier)
 	if err := row.Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return

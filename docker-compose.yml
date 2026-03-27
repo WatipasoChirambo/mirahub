@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgres:15
@@ -19,14 +18,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DB_HOST: db
-      DB_USER: mirahub
-      DB_PASSWORD: mirahub123
-      DB_NAME: mirahub
-      DB_PORT: 5432
+      DATABASE_URL: postgres://mirahub:mirahub123@db:5432/mirahub?sslmode=disable
     depends_on:
       - db
-    command: ["sh", "-c", "./wait-for-db.sh $DB_HOST ./mirahub-app"]
+    command: [ "./mirahub-app" ]
 
 volumes:
   db_data:

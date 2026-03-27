@@ -13,12 +13,24 @@ import (
 )
 
 func main() {
+	// Build DSN
 	dsn := os.Getenv("DATABASE_URL")
-
 	if dsn == "" {
-		log.Fatal("DATABASE_URL is not set")
+		host := os.Getenv("DB_HOST")
+		user := os.Getenv("DB_USER")
+		password := os.Getenv("DB_PASSWORD")
+		name := os.Getenv("DB_NAME")
+		port := os.Getenv("DB_PORT")
+
+		if host == "" {
+			log.Fatal("No database configuration provided")
+		}
+
+		dsn = "postgres://" + user + ":" + password +
+			"@" + host + ":" + port + "/" + name + "?sslmode=disable"
 	}
 
+	// Connect to DB
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
@@ -27,9 +39,10 @@ func main() {
 
 	log.Println("Connected to DB")
 
+	// Gin router
 	r := gin.Default()
 
-	// CORS config
+	// CORS
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -39,17 +52,20 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Make db available in handlers via context
 	r.Use(func(c *gin.Context) {
-		c.Set("db", db.DB)
+		c.Set("db", db.DB) // <- db.DB is *sql.DB
 		c.Next()
 	})
 
-	routes.SetupRoutes(r)
+	// PASS db to routes
+	routes.SetupRoutes(r, db)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
+	log.Println("Server running on port", port)
 	r.Run(":" + port)
 }

@@ -11,10 +11,12 @@ CREATE TABLE IF NOT EXISTS suppliers (
     contact_info TEXT
 );
 
--- Users table
+-- Users table with email and phone
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(50) DEFAULT 'user', -- e.g., admin, user
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -35,14 +37,18 @@ CREATE TABLE IF NOT EXISTS products (
     category_id INT REFERENCES categories(id),
     supplier_id INT REFERENCES suppliers(id),
     warehouse_id INT REFERENCES warehouses(id),
-    stock INT DEFAULT 0
+    stock INT DEFAULT 0,
+    price NUMERIC(10,2) DEFAULT 0.00,  -- unit price added
+    created_by INT REFERENCES users(id)
 );
 
--- Sales
+-- Sales with price
 CREATE TABLE IF NOT EXISTS sales (
     id SERIAL PRIMARY KEY,
     product_id INT REFERENCES products(id),
+    user_id INT REFERENCES users(id),      -- who made the sale
     quantity INT NOT NULL,
+    price NUMERIC(10,2) NOT NULL,         -- price at time of sale
     sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -50,6 +56,7 @@ CREATE TABLE IF NOT EXISTS sales (
 CREATE TABLE IF NOT EXISTS invoices (
     id SERIAL PRIMARY KEY,
     sale_id INT REFERENCES sales(id),
+    user_id INT REFERENCES users(id), -- who issued the invoice
     invoice_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     total NUMERIC(10,2)
 );
@@ -58,6 +65,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE TABLE IF NOT EXISTS quotations (
     id SERIAL PRIMARY KEY,
     product_id INT REFERENCES products(id),
+    user_id INT REFERENCES users(id), -- who created the quote
     quote_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     price NUMERIC(10,2)
 );
@@ -66,6 +74,7 @@ CREATE TABLE IF NOT EXISTS quotations (
 CREATE TABLE IF NOT EXISTS receipts (
     id SERIAL PRIMARY KEY,
     invoice_id INT REFERENCES invoices(id),
+    user_id INT REFERENCES users(id), -- who received the payment
     receipt_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     amount NUMERIC(10,2)
 );
