@@ -33,10 +33,13 @@ CREATE TABLE IF NOT EXISTS warehouses (
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     code VARCHAR(50) UNIQUE NOT NULL,
+    item_code VARCHAR(50) UNIQUE NOT NULL,
+    hold VARCHAR DEFAULT FALSE,
     name VARCHAR(255) NOT NULL,
     category_id INT REFERENCES categories(id),
     supplier_id INT REFERENCES suppliers(id),
     warehouse_id INT REFERENCES warehouses(id),
+    Vehicle VARCHAR(255), -- new field for vehicle association
     stock INT DEFAULT 0,
     price NUMERIC(10,2) DEFAULT 0.00,  -- unit price added
     created_by INT REFERENCES users(id)

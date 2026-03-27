@@ -16,6 +16,12 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		public.POST("/auth/login", handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 
+		r.POST("/api/seed-all", func(c *gin.Context) {
+			handlers.SeedAll(c, db)
+		})
+
+		public.GET('/')
+
 		// Wrap SeedProducts to pass db
 		public.POST("/seed-products", func(c *gin.Context) {
 			handlers.SeedProducts(c, db)

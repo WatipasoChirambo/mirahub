@@ -92,6 +92,99 @@ func Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 }
 
+func SeedAll(c *gin.Context, db *sqlx.DB) {
+	tx := db.MustBegin()
+
+	// ✅ Seed Users
+	_, err := tx.Exec(`
+        INSERT INTO users (id, name, email, password)
+        VALUES (1, 'Admin', 'admin@mirahub.com', 'password')
+        ON CONFLICT (id) DO NOTHING
+    `)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ✅ Seed Categories
+	_, err = tx.Exec(`
+        INSERT INTO categories (id, name)
+        VALUES 
+            (1, 'Electronics'),
+            (2, 'Accessories'),
+            (3, 'Automotive')
+        ON CONFLICT (id) DO NOTHING
+    `)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ✅ Seed Suppliers
+	_, err = tx.Exec(`
+        INSERT INTO suppliers (id, name, contact)
+        VALUES
+            (1, 'MegaTech', '0123456789'),
+            (2, 'AutoSuppliers Ltd', '013339991')
+        ON CONFLICT (id) DO NOTHING
+    `)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ✅ Seed Warehouses
+	_, err = tx.Exec(`
+        INSERT INTO warehouses (id, name, location)
+        VALUES
+            (1, 'Main Warehouse', 'Blantyre'),
+            (2, 'Secondary Warehouse', 'Lilongwe')
+        ON CONFLICT (id) DO NOTHING
+    `)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ✅ Seed Products
+	_, err = tx.Exec(`
+        INSERT INTO products
+            (code, item_code, hold, name, category_id, supplier_id, warehouse_id, vehicle, stock, price, created_by)
+        VALUES
+            ('P001', 'ITM001', false, 'Laptop', 1, 1, 1, '', 10, 450000, 1),
+            ('P002', 'ITM002', false, 'Keyboard', 1, 1, 1, '', 15, 15000, 1),
+            ('P003', 'ITM003', false, 'Mouse', 1, 1, 1, '', 20, 8000, 1),
+            ('P004', 'ITM004', false, 'Monitor', 1, 1, 1, '', 5, 120000, 1),
+            ('P005', 'ITM005', false, 'Printer', 1, 1, 1, '', 8, 95000, 1)
+        ON CONFLICT (code) DO NOTHING
+    `)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "✅ Database seeded successfully!",
+		"data": gin.H{
+			"users":      1,
+			"categories": 3,
+			"suppliers":  2,
+			"warehouses": 2,
+			"products":   5,
+		},
+	})
+}
+
 // SeedProducts creates 5 dummy products
 func SeedProducts(c *gin.Context, db *sqlx.DB) {
 	products := []models.Product{
