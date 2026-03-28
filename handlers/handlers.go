@@ -256,7 +256,11 @@ func Login(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
 	var user models.User
-	row := db.QueryRow("SELECT id, username, password_hash, role FROM users WHERE username=$1", req.Identifier)
+	row := db.QueryRow(`
+    SELECT id, username, password_hash, role
+    FROM users
+    WHERE username=$1 OR email=$1 OR phone=$1
+`, req.Identifier)
 	if err := row.Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
