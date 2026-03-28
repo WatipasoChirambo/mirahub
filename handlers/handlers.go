@@ -584,30 +584,64 @@ func DeleteWarehouse(c *gin.Context) {
 }
 
 func CreateSale(c *gin.Context) {
-	var req CreateSaleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
-
 	db := c.MustGet("db").(*sql.DB)
-	userID := c.GetInt("user_id")
 
-	// Insert sale
-	_, err := db.Exec("INSERT INTO sales(product_id, user_id, quantity) VALUES($1,$2,$3)", req.ProductID, userID, req.Quantity)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// ✅ Extract user_id from JWT
+	claims := c.MustGet("claims").(jwt.MapClaims)
+	userID := int(claims["user_id"].(float64))
+
+	type Body struct {
+		ProductID int     `json:"product_id"`
+		Quantity  int     `json:"quantity"`
+		Price     float64 `json:"price"`
+	}
+
+	var b Body
+	if err := c.ShouldBindJSON(&b); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid body"})
 		return
 	}
 
-	// Decrement stock
-	_, err = db.Exec("UPDATE products SET stock = stock - $1 WHERE id=$2", req.Quantity, req.ProductID)
+	// ✅ Optional: Check stock before making sale
+	var currentStock int
+	err := db.QueryRow("SELECT stock FROM products WHERE id=$1", b.ProductID).Scan(&currentStock)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Product not found"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Sale created"})
+	if b.Quantity > currentStock {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quantity exceeds available stock"})
+		return
+	}
+
+	// ✅ Insert sale (using user_id from token)
+	_, err = db.Exec(`
+        INSERT INTO sales (product_id, user_id, quantity, price)
+        VALUES ($1, $2, $3, $4)
+    `, b.ProductID, userID, b.Quantity, b.Price)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB insert failed"})
+		return
+	}
+
+	// ✅ Optional: Deduct stock
+	_, err = db.Exec(`
+        UPDATE products
+        SET stock = stock - $1
+        WHERE id = $2
+    `, b.Quantity, b.ProductID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stock"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Sale created successfully",
+		"user_id": userID,
+	})
 }
 
 // -------------------- Invoices --------------------
