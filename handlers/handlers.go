@@ -159,16 +159,37 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 	// ✅ Seed Products
 	_, err = tx.Exec(`
-        INSERT INTO products
-            (code, item_code, hold, name, category_id, supplier_id, warehouse_id, vehicle, stock, price, created_by)
-        VALUES
-            ('P001', 'ITM001', false, 'Laptop', 1, 1, 1, '', 10, 450000, 1),
-            ('P002', 'ITM002', false, 'Keyboard', 1, 1, 1, '', 15, 15000, 1),
-            ('P003', 'ITM003', false, 'Mouse', 1, 1, 1, '', 20, 8000, 1),
-            ('P004', 'ITM004', false, 'Monitor', 1, 1, 1, '', 5, 120000, 1),
-            ('P005', 'ITM005', false, 'Printer', 1, 1, 1, '', 8, 95000, 1)
-        ON CONFLICT (code) DO NOTHING
-    `)
+    INSERT INTO products
+        (code, item_code, hold, name, category_id, supplier_id, warehouse_id, vehicle, stock, price, created_by)
+    VALUES
+        ('Z80',         'OF23',  'A1-1B',      'Oil Filter', 1, 1, 1, NULL,             0, 0.00, 1),
+        ('Z131',        'OF7',   'A1-4C',      'Oil Filter', 1, 1, 1, 'Toyota Old Hi',  0, 0.00, 1),
+        ('Z347',        'OF18',  'A1-5B',      'Oil Filter', 1, 1, 1, NULL,             0, 0.00, 1),
+        ('Z95',         'OF10',  'A1-A+',      'Oil Filter', 1, 1, 1, 'Ford Ranger 2',  0, 0.00, 1),
+
+        ('7801-21040',  'AF11',  'A9-3AB',     'Air Filter', 1, 1, 1, 'Toyota Prius',   0, 0.00, 1),
+        ('16546-41B00', 'AF2',   'A9-1C',      'Air Filter', 1, 1, 1, 'Nissan March',   0, 0.00, 1),
+        ('17801-11130', 'AF9',   'A9-4AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
+        ('17801-38050', 'AF25',  'A9-2AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
+        ('17801-33040', 'AF22',  'A5-1B',      'Air Filter', 1, 1, 1, 'Toyota Probox',  0, 0.00, 1),
+        ('17801-30040', 'AF17',  'A9-3AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
+        ('17801-28030', 'AF16',  'A5-6B',      'Air Filter', 1, 1, 1, 'Toyota Camry',   0, 0.00, 1),
+        ('17801-31090', 'AF20',  'A9-1AB',     'Air Filter', 1, 1, 1, 'Toyota FJ Cru',  0, 0.00, 1),
+        ('17801-31120', 'AF21',  '',           'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
+        ('17801-50040', 'AF27',  'A9-4AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
+        ('17801-38011', 'AF24',  'A9-2C',      'Air Filter', 1, 1, 1, 'Toyota Camry',   0, 0.00, 1),
+        ('17801-30060', 'AF18',  'A6-3AB',     'Air Filter', 1, 1, 1, 'Toyota Hiace',   0, 0.00, 1),
+        ('17801-37020', 'AF23',  'A9-2AB',     'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
+        ('17801-30070', 'AF19',  'A9-1AB',     'Air Filter', 1, 1, 1, 'Toyota Hiace',   0, 0.00, 1),
+        ('17801-77050', 'AF34',  'A5-5B',      'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
+        ('17801-97402', 'AF37',  'A5-5C',      'Air Filter', 1, 1, 1, 'Toyota Passo',   0, 0.00, 1),
+        ('17801-21060', 'AF13',  '',           'Air Filter', 1, 1, 1, 'Toyota Passo 1', 0, 0.00, 1),
+        ('80292-T5R-E01','AF46', 'A5-1B',      'Air Filter', 1, 1, 1, NULL,             0, 0.00, 1),
+        ('17801-B1010', 'AF38',  'A6-6AB',     'Air Filter', 1, 1, 1, 'Daihatsu Terio', 0, 0.00, 1),
+        ('17801-28010', 'AF15',  'A6-5AB',     'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
+        ('17801-54110', 'AF28',  'A6-4AB',     'Air Filter', 1, 1, 1, 'Toyota Hiace/1', 0, 0.00, 1)
+    ON CONFLICT (code) DO NOTHING;
+`)
 	if err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": err.Error()})
