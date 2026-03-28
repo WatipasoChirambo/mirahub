@@ -379,6 +379,104 @@ func GetProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 
+func CreateSale(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	// ✅ Extract user ID from JWT
+	claims := c.MustGet("claims").(jwt.MapClaims)
+	userID := int(claims["user_id"].(float64))
+
+	type Body struct {
+		ProductID int     `json:"product_id"`
+		Quantity  int     `json:"quantity"`
+		Price     float64 `json:"price"`
+	}
+
+	var b Body
+	if err := c.ShouldBindJSON(&b); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON body"})
+		return
+	}
+
+	// ✅ Begin atomic transaction
+	tx, err := db.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+		return
+	}
+
+	// Rollback helper
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// ✅ Lock product row (FOR UPDATE prevents race conditions)
+	var currentStock int
+	err = tx.QueryRow(`
+        SELECT stock 
+        FROM products 
+        WHERE id = ? 
+        FOR UPDATE
+    `, b.ProductID).Scan(&currentStock)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Product not found"})
+		return
+	}
+
+	// ✅ Prevent negative stock
+	if b.Quantity > currentStock {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quantity exceeds available stock"})
+		return
+	}
+
+	// ✅ Insert sale + return sale ID + timestamp
+	var saleID int
+	var saleDate time.Time
+
+	err = tx.QueryRow(`
+        INSERT INTO sales (product_id, user_id, quantity, price)
+        VALUES (?, ?, ?, ?)
+        RETURNING id, sale_date
+    `, b.ProductID, userID, b.Quantity, b.Price).Scan(&saleID, &saleDate)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sale"})
+		return
+	}
+
+	// ✅ Deduct stock
+	_, err = tx.Exec(`
+        UPDATE products
+        SET stock = stock - ?
+        WHERE id = ?
+    `, b.Quantity, b.ProductID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stock"})
+		return
+	}
+
+	// ✅ Commit atomic transaction
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failed"})
+		return
+	}
+
+	// ✅ Return full sale record
+	c.JSON(http.StatusCreated, gin.H{
+		"message":    "Sale created successfully",
+		"sale_id":    saleID,
+		"product_id": b.ProductID,
+		"user_id":    userID,
+		"quantity":   b.Quantity,
+		"price":      b.Price,
+		"sale_date":  saleDate,
+	})
+}
+
 func CreateInvoice(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 	userID := c.GetInt("user_id")
