@@ -716,6 +716,12 @@ func GetSales(c *gin.Context) {
 		sales = append(sales, s)
 	}
 
+	// ✅ Recommended fix
+	if err := rows.Err(); err != nil {
+		c.JSON(500, gin.H{"error": "Row iteration error"})
+		return
+	}
+
 	c.JSON(200, sales)
 }
 
