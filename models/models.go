@@ -42,8 +42,13 @@ type Product struct {
 	SupplierID  int     `db:"supplier_id" json:"supplier_id"`
 	WarehouseID int     `db:"warehouse_id" json:"warehouse_id"`
 	Stock       int     `db:"stock" json:"stock"`
-	Price       float64 `db:"price" json:"price"` // Added price per unit
-	CreatedBy   int     `db:"created_by" json:"created_by"`
+	Price       float64 `db:"price" json:"price"` // ✅ Per unit
+
+	Hold     string `db:"hold" json:"hold"`           // ✅ NEW
+	Vehicle  string `db:"vehicle" json:"vehicle"`     // ✅ NEW
+	ItemCode string `db:"item_code" json:"item_code"` // ✅ NEW
+
+	CreatedBy int `db:"created_by" json:"created_by"`
 }
 
 // Sales

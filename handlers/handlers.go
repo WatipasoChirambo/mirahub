@@ -388,8 +388,9 @@ func GetProducts(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
 	rows, err := db.Query(`
-    SELECT id, code, name, category_id, supplier_id, warehouse_id, stock, price, created_by
-    FROM products
+    SELECT id, code, name, category_id, supplier_id, warehouse_id,
+       stock, price, hold, vehicle, item_code, created_by
+FROM products;
 `)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -400,7 +401,20 @@ func GetProducts(c *gin.Context) {
 	products := []models.Product{}
 	for rows.Next() {
 		var p models.Product
-		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.CategoryID, &p.SupplierID, &p.WarehouseID, &p.Stock, &p.Price, &p.CreatedBy); err != nil {
+		if err := rows.Scan(
+			&p.ID,
+			&p.Code,
+			&p.Name,
+			&p.CategoryID,
+			&p.SupplierID,
+			&p.WarehouseID,
+			&p.Stock,
+			&p.Price,
+			&p.Hold,
+			&p.Vehicle,
+			&p.ItemCode,
+			&p.CreatedBy,
+		); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
