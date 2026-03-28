@@ -97,7 +97,7 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 	// ✅ Seed Users
 	_, err := tx.Exec(`
-        INSERT INTO users (id, name, email, password)
+        INSERT INTO users (id, username, email, password)
         VALUES (1, 'Admin', 'admin@mirahub.com', 'password')
         ON CONFLICT (id) DO NOTHING
     `)
