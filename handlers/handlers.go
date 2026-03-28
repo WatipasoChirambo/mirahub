@@ -96,6 +96,7 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 	tx := db.MustBegin()
 
 	// ✅ Seed Users
+
 	_, err := tx.Exec(`
     INSERT INTO users (id, username, email, phone, password_hash, role)
     VALUES (
@@ -106,7 +107,7 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
         '$2a$12$uMl7jYQZ.A4dHqK5bMEwEu6k3Gak8z0N5L8lYEBeo4Qg.UL1rJ9fy',
         'admin'
     )
-    ON CONFLICT (id) DO NOTHING
+    ON CONFLICT (id) DO NOTHING;
 `)
 	if err != nil {
 		tx.Rollback()
