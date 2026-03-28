@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -254,6 +255,8 @@ func Login(c *gin.Context) {
 	}
 
 	db := c.MustGet("db").(*sql.DB)
+
+	log.Println("🔍 LOGIN HANDLER RUNNING WITH IDENTIFIER:", req.Identifier)
 
 	var user models.User
 	row := db.QueryRow(`
