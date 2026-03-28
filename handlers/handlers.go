@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"mirahub/models"
@@ -317,7 +319,6 @@ func Logout(c *gin.Context) {
 
 // -------------------- Middleware --------------------
 
-// AuthMiddleware checks for JWT token
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -327,13 +328,26 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		tokenString := authHeader[len("Bearer "):]
+		// ✅ Safe Bearer parsing
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Authorization header format"})
+			c.Abort()
+			return
+		}
+
+		tokenString := parts[1]
+
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
 			secret = "supersecretkey"
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Optional: enforce signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
 			return []byte(secret), nil
 		})
 
@@ -343,10 +357,27 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-		c.Set("user_id", int(claims["user_id"].(float64)))
-		c.Set("username", claims["username"])
-		c.Set("role", claims["role"])
+		// ✅ Safe claims extraction
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		// ✅ Safely extract fields
+		if uid, ok := claims["user_id"].(float64); ok {
+			c.Set("user_id", int(uid))
+		}
+
+		if username, ok := claims["username"].(string); ok {
+			c.Set("username", username)
+		}
+
+		if role, ok := claims["role"].(string); ok {
+			c.Set("role", role)
+		}
+
 		c.Next()
 	}
 }
@@ -382,97 +413,93 @@ func GetProducts(c *gin.Context) {
 func CreateSale(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
-	// ✅ Extract user ID from JWT
-	claims := c.MustGet("claims").(jwt.MapClaims)
-	userID := int(claims["user_id"].(float64))
+	// ✅ Get authenticated user
+	userID := c.GetInt("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
 
-	type Body struct {
+	// ✅ Input struct (DO NOT include user_id)
+	var input struct {
 		ProductID int     `json:"product_id"`
 		Quantity  int     `json:"quantity"`
 		Price     float64 `json:"price"`
 	}
 
-	var b Body
-	if err := c.ShouldBindJSON(&b); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON body"})
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// ✅ Begin atomic transaction
+	// ✅ Start transaction
 	tx, err := db.Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+		c.JSON(500, gin.H{"error": "Failed to start transaction"})
 		return
 	}
+	defer tx.Rollback()
 
-	// Rollback helper
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// ✅ Lock product row (FOR UPDATE prevents race conditions)
-	var currentStock int
+	// ✅ Lock product row (prevents overselling)
+	var stock int
 	err = tx.QueryRow(`
-        SELECT stock 
-        FROM products 
-        WHERE id = ? 
-        FOR UPDATE
-    `, b.ProductID).Scan(&currentStock)
+		SELECT stock 
+		FROM products 
+		WHERE id = $1 
+		FOR UPDATE
+	`, input.ProductID).Scan(&stock)
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Product not found"})
+		c.JSON(500, gin.H{"error": "Product not found"})
 		return
 	}
 
-	// ✅ Prevent negative stock
-	if b.Quantity > currentStock {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quantity exceeds available stock"})
-		return
-	}
-
-	// ✅ Insert sale + return sale ID + timestamp
-	var saleID int
-	var saleDate time.Time
-
-	err = tx.QueryRow(`
-        INSERT INTO sales (product_id, user_id, quantity, price)
-        VALUES (?, ?, ?, ?)
-        RETURNING id, sale_date
-    `, b.ProductID, userID, b.Quantity, b.Price).Scan(&saleID, &saleDate)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sale"})
+	// ✅ Check stock
+	if input.Quantity > stock {
+		c.JSON(400, gin.H{"error": "Insufficient stock"})
 		return
 	}
 
 	// ✅ Deduct stock
 	_, err = tx.Exec(`
-        UPDATE products
-        SET stock = stock - ?
-        WHERE id = ?
-    `, b.Quantity, b.ProductID)
+		UPDATE products 
+		SET stock = stock - $1 
+		WHERE id = $2
+	`, input.Quantity, input.ProductID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stock"})
+		c.JSON(500, gin.H{"error": "Failed to update stock"})
 		return
 	}
 
-	// ✅ Commit atomic transaction
-	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failed"})
+	// ✅ Insert sale
+	var saleID int
+	var saleDate string
+
+	err = tx.QueryRow(`
+		INSERT INTO sales (product_id, user_id, quantity, price)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, sale_date
+	`, input.ProductID, userID, input.Quantity, input.Price).Scan(&saleID, &saleDate)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create sale"})
 		return
 	}
 
-	// ✅ Return full sale record
-	c.JSON(http.StatusCreated, gin.H{
-		"message":    "Sale created successfully",
-		"sale_id":    saleID,
-		"product_id": b.ProductID,
+	// ✅ Commit transaction
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	// ✅ Response
+	c.JSON(201, gin.H{
+		"id":         saleID,
+		"product_id": input.ProductID,
 		"user_id":    userID,
-		"quantity":   b.Quantity,
-		"price":      b.Price,
+		"quantity":   input.Quantity,
+		"price":      input.Price,
 		"sale_date":  saleDate,
 	})
 }
@@ -690,6 +717,7 @@ func GetSales(c *gin.Context) {
 		LEFT JOIN users u ON u.id = p.created_by
 		ORDER BY s.id DESC
 	`)
+
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error":   "Database query failed",
@@ -735,7 +763,7 @@ func GetSales(c *gin.Context) {
 		return
 	}
 
-	// Always return empty array instead of null
+	// ✅ Always return empty array instead of null
 	if sales == nil {
 		sales = []models.SaleResponse{}
 	}
