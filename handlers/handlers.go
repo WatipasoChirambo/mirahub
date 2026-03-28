@@ -379,20 +379,6 @@ func GetProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 
-func GetSales(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
-	rows, _ := db.Query("SELECT id, product_id, user_id, quantity, sale_date FROM sales")
-	defer rows.Close()
-
-	var list []models.Sale
-	for rows.Next() {
-		var m models.Sale
-		rows.Scan(&m.ID, &m.ProductID, &m.UserID, &m.Quantity, &m.SaleDate)
-		list = append(list, m)
-	}
-	c.JSON(http.StatusOK, gin.H{"sales": list})
-}
-
 func CreateInvoice(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 	userID := c.GetInt("user_id")
@@ -587,65 +573,52 @@ func DeleteWarehouse(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
-func CreateSale(c *gin.Context) {
+func GetSales(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
-	// ✅ Extract user_id from JWT
-	claims := c.MustGet("claims").(jwt.MapClaims)
-	userID := int(claims["user_id"].(float64))
-
-	type Body struct {
-		ProductID int     `json:"product_id"`
-		Quantity  int     `json:"quantity"`
-		Price     float64 `json:"price"`
-	}
-
-	var b Body
-	if err := c.ShouldBindJSON(&b); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid body"})
-		return
-	}
-
-	// ✅ Optional: Check stock before making sale
-	var currentStock int
-	err := db.QueryRow("SELECT stock FROM products WHERE id=$1", b.ProductID).Scan(&currentStock)
+	rows, err := db.Query(`
+        SELECT 
+            s.id, s.product_id, s.user_id, s.quantity, s.price, s.sale_date,
+            p.name AS product_name,
+            u.username AS username
+        FROM sales s
+        JOIN products p ON p.id = s.product_id
+        JOIN users u ON u.id = s.user_id
+        ORDER BY s.id DESC
+    `)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Product not found"})
+		c.JSON(500, gin.H{"error": "Database query failed"})
 		return
 	}
+	defer rows.Close()
 
-	if b.Quantity > currentStock {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quantity exceeds available stock"})
-		return
+	type SaleResponse struct {
+		ID          int       `json:"id"`
+		ProductID   int       `json:"product_id"`
+		UserID      int       `json:"user_id"`
+		Quantity    int       `json:"quantity"`
+		Price       float64   `json:"price"`
+		SaleDate    time.Time `json:"sale_date"`
+		ProductName string    `json:"product_name"`
+		Username    string    `json:"username"`
 	}
 
-	// ✅ Insert sale (using user_id from token)
-	_, err = db.Exec(`
-        INSERT INTO sales (product_id, user_id, quantity, price)
-        VALUES ($1, $2, $3, $4)
-    `, b.ProductID, userID, b.Quantity, b.Price)
+	var sales []SaleResponse
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB insert failed"})
-		return
+	for rows.Next() {
+		var s SaleResponse
+		err := rows.Scan(
+			&s.ID, &s.ProductID, &s.UserID, &s.Quantity, &s.Price, &s.SaleDate,
+			&s.ProductName, &s.Username,
+		)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Scan failed"})
+			return
+		}
+		sales = append(sales, s)
 	}
 
-	// ✅ Optional: Deduct stock
-	_, err = db.Exec(`
-        UPDATE products
-        SET stock = stock - $1
-        WHERE id = $2
-    `, b.Quantity, b.ProductID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stock"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Sale created successfully",
-		"user_id": userID,
-	})
+	c.JSON(200, sales)
 }
 
 // -------------------- Invoices --------------------
