@@ -675,15 +675,15 @@ func GetSales(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
 	rows, err := db.Query(`
-        SELECT 
-            s.id, s.product_id, s.user_id, s.quantity, s.price, s.sale_date,
-            p.name AS product_name,
-            u.username AS username
-        FROM sales s
-        JOIN products p ON p.id = s.product_id
-        JOIN users u ON u.id = s.user_id
-        ORDER BY s.id DESC
-    `)
+    SELECT 
+        s.id, s.product_id, s.user_id, s.quantity, s.price, s.sale_date,
+        p.name AS product_name,
+        u.username AS username
+    FROM sales s
+    JOIN products p ON p.id = s.product_id
+    LEFT JOIN users u ON u.id = s.user_id
+    ORDER BY s.id DESC
+`)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Database query failed"})
 		return
