@@ -675,50 +675,55 @@ func GetSales(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
 	rows, err := db.Query(`
-    SELECT 
-        s.id, s.product_id, s.user_id, s.quantity, s.price, s.sale_date,
-        p.name AS product_name,
-        u.username AS username
-    FROM sales s
-    JOIN products p ON p.id = s.product_id
-    LEFT JOIN users u ON u.id = s.user_id
-    ORDER BY s.id DESC
-`)
+		SELECT 
+			s.id,
+			s.product_id,
+			s.user_id,
+			s.quantity,
+			s.price,
+			s.sale_date,
+			p.name AS product_name,
+			u.id AS created_by_id,
+			u.username AS created_by_username
+		FROM sales s
+		JOIN products p ON p.id = s.product_id
+		LEFT JOIN users u ON u.id = p.created_by
+		ORDER BY s.id DESC
+	`)
+
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Database query failed"})
 		return
 	}
 	defer rows.Close()
 
-	type SaleResponse struct {
-		ID          int       `json:"id"`
-		ProductID   int       `json:"product_id"`
-		UserID      int       `json:"user_id"`
-		Quantity    int       `json:"quantity"`
-		Price       float64   `json:"price"`
-		SaleDate    time.Time `json:"sale_date"`
-		ProductName string    `json:"product_name"`
-		Username    string    `json:"username"`
-	}
-
-	var sales []SaleResponse
+	var sales []models.SaleResponse
 
 	for rows.Next() {
-		var s SaleResponse
+		var s models.SaleResponse
+
 		err := rows.Scan(
-			&s.ID, &s.ProductID, &s.UserID, &s.Quantity, &s.Price, &s.SaleDate,
-			&s.ProductName, &s.Username,
+			&s.ID,
+			&s.ProductID,
+			&s.UserID,
+			&s.Quantity,
+			&s.Price,
+			&s.SaleDate,
+			&s.ProductName,
+			&s.CreatedByID,
+			&s.CreatedByUsername,
 		)
+
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Scan failed"})
+			c.JSON(500, gin.H{"error": "Scan failed", "details": err.Error()})
 			return
 		}
+
 		sales = append(sales, s)
 	}
 
-	// ✅ Recommended fix
 	if err := rows.Err(); err != nil {
-		c.JSON(500, gin.H{"error": "Row iteration error"})
+		c.JSON(500, gin.H{"error": "Row iteration error", "details": err.Error()})
 		return
 	}
 

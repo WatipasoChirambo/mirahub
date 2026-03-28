@@ -56,6 +56,20 @@ type Sale struct {
 	SaleDate  time.Time `db:"sale_date" json:"sale_date"`
 }
 
+type SaleResponse struct {
+	ID        int       `json:"id"`
+	ProductID int       `json:"product_id"`
+	UserID    int       `json:"user_id"`
+	Quantity  int       `json:"quantity"`
+	Price     float64   `json:"price"`
+	SaleDate  time.Time `json:"sale_date"`
+
+	ProductName string `json:"product_name"`
+
+	CreatedByID       *int    `json:"created_by_id"`
+	CreatedByUsername *string `json:"created_by_username"`
+}
+
 // Invoices
 type Invoice struct {
 	ID          int       `db:"id" json:"id"`
