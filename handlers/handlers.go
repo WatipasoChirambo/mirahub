@@ -257,15 +257,17 @@ func Login(c *gin.Context) {
 
 	var user models.User
 	row := db.QueryRow(`
-    SELECT id, username, password_hash, role
-    FROM users
-    WHERE username=$1 OR email=$1 OR phone=$1
-`, req.Identifier)
+        SELECT id, username, password_hash, role
+        FROM users
+        WHERE username=$1 OR email=$1 OR phone=$1
+    `, req.Identifier)
+
 	if err := row.Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
+	// compare password with bcrypt hash
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
