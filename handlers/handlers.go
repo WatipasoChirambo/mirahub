@@ -355,7 +355,11 @@ func AuthMiddleware() gin.HandlerFunc {
 
 func GetProducts(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
-	rows, err := db.Query("SELECT id, code, name, category_id, supplier_id, warehouse_id, stock, created_by FROM products")
+
+	rows, err := db.Query(`
+    SELECT id, code, name, category_id, supplier_id, warehouse_id, stock, price, created_by
+    FROM products
+`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
