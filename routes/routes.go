@@ -16,7 +16,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		public.POST("/auth/login", handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 
-		r.POST("/api/seed-all", func(c *gin.Context) {
+		public.POST("/seed-all", func(c *gin.Context) {
 			handlers.SeedAll(c, db)
 		})
 
