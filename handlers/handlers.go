@@ -369,7 +369,7 @@ func GetProducts(c *gin.Context) {
 	products := []models.Product{}
 	for rows.Next() {
 		var p models.Product
-		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.CategoryID, &p.SupplierID, &p.WarehouseID, &p.Stock, &p.CreatedBy); err != nil {
+		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.CategoryID, &p.SupplierID, &p.WarehouseID, &p.Stock, &p.Price, &p.CreatedBy); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
