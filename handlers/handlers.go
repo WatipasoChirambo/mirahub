@@ -97,7 +97,7 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 	// ✅ Seed Users
 	_, err := tx.Exec(`
-		INSERT INTO users (id, username, email, phone, password_hash, role)
+		INSERT INTO users (id, username, email, phone, password, role)
 		VALUES (
 			1,
 			'admin',
@@ -131,7 +131,7 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 	// ✅ Seed Suppliers
 	_, err = tx.Exec(`
-        INSERT INTO suppliers (id, name, contact)
+        INSERT INTO suppliers (id, name, contact_info)
         VALUES
             (1, 'MegaTech', '0123456789'),
             (2, 'AutoSuppliers Ltd', '013339991')
