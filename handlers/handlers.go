@@ -97,17 +97,17 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 	// ✅ Seed Users
 	_, err := tx.Exec(`
-		INSERT INTO users (id, username, email, phone, password, role)
-		VALUES (
-			1,
-			'admin',
-			'admin@mirahub.com',
-			'0990000000',
-			'$2a$12$uMl7jYQZ.A4dHqK5bMEwEu6k3Gak8z0N5L8lYEBeo4Qg.UL1rJ9fy',
-			'admin'
-		)
-		ON CONFLICT (id) DO NOTHING
-	`)
+    INSERT INTO users (id, username, email, phone, password_hash, role)
+    VALUES (
+        1,
+        'admin',
+        'admin@mirahub.com',
+        '0990000000',
+        '$2a$12$uMl7jYQZ.A4dHqK5bMEwEu6k3Gak8z0N5L8lYEBeo4Qg.UL1rJ9fy',
+        'admin'
+    )
+    ON CONFLICT (id) DO NOTHING
+`)
 	if err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": err.Error()})
