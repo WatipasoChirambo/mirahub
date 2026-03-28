@@ -690,9 +690,11 @@ func GetSales(c *gin.Context) {
 		LEFT JOIN users u ON u.id = p.created_by
 		ORDER BY s.id DESC
 	`)
-
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Database query failed"})
+		c.JSON(500, gin.H{
+			"error":   "Database query failed",
+			"details": err.Error(),
+		})
 		return
 	}
 	defer rows.Close()
@@ -715,7 +717,10 @@ func GetSales(c *gin.Context) {
 		)
 
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Scan failed", "details": err.Error()})
+			c.JSON(500, gin.H{
+				"error":   "Scan failed",
+				"details": err.Error(),
+			})
 			return
 		}
 
@@ -723,8 +728,16 @@ func GetSales(c *gin.Context) {
 	}
 
 	if err := rows.Err(); err != nil {
-		c.JSON(500, gin.H{"error": "Row iteration error", "details": err.Error()})
+		c.JSON(500, gin.H{
+			"error":   "Row iteration error",
+			"details": err.Error(),
+		})
 		return
+	}
+
+	// Always return empty array instead of null
+	if sales == nil {
+		sales = []models.SaleResponse{}
 	}
 
 	c.JSON(200, sales)
