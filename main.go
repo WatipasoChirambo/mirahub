@@ -13,6 +13,9 @@ import (
 )
 
 func main() {
+	// Set production mode
+	gin.SetMode(gin.ReleaseMode)
+
 	// Build DSN
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -27,7 +30,7 @@ func main() {
 		}
 
 		dsn = "postgres://" + user + ":" + password +
-			"@" + host + ":" + port + "/" + name + "?sslmode=disable"
+			"@" + host + ":" + port + "/" + name + "?sslmode=require"
 	}
 
 	// Connect to DB
@@ -39,8 +42,9 @@ func main() {
 
 	log.Println("Connected to DB")
 
-	// Gin router
+	// Router
 	r := gin.Default()
+	r.SetTrustedProxies(nil)
 
 	// CORS
 	r.Use(cors.New(cors.Config{
@@ -48,19 +52,20 @@ func main() {
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Make db available in handlers via context
+	// Inject DB
 	r.Use(func(c *gin.Context) {
-		c.Set("db", db.DB) // <- db.DB is *sql.DB
+		c.Set("db", db.DB)
 		c.Next()
 	})
 
-	// PASS db to routes
+	// Routes
 	routes.SetupRoutes(r, db)
 
+	// Port (Railway)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
