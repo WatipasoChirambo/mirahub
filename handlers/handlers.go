@@ -388,20 +388,34 @@ func GetProducts(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
 	rows, err := db.Query(`
-    SELECT id, code, name, category_id, supplier_id, warehouse_id,
-       stock, price, hold, vehicle, item_code, created_by
-FROM products;
-`)
+        SELECT 
+            id, 
+            code, 
+            name, 
+            category_id, 
+            supplier_id, 
+            warehouse_id,
+            stock, 
+            price, 
+            hold, 
+            vehicle, 
+            item_code, 
+            created_by
+        FROM products
+        ORDER BY id ASC
+    `)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed: " + err.Error()})
 		return
 	}
 	defer rows.Close()
 
 	products := []models.Product{}
+
 	for rows.Next() {
 		var p models.Product
-		if err := rows.Scan(
+
+		err := rows.Scan(
 			&p.ID,
 			&p.Code,
 			&p.Name,
@@ -414,11 +428,20 @@ FROM products;
 			&p.Vehicle,
 			&p.ItemCode,
 			&p.CreatedBy,
-		); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Scan error: " + err.Error()})
 			return
 		}
+
 		products = append(products, p)
+	}
+
+	// ✅ Check iteration errors
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Row iteration failed: " + err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"products": products})
