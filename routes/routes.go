@@ -20,16 +20,6 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		// public.POST("/sales", handlers.CreateSale)
 		// public.GET("/sales", handlers.GetSales)
 
-		// Categories
-		public.POST("/categories", handlers.CreateCategory)
-		public.PUT("/categories/:id", handlers.UpdateCategory)
-		public.DELETE("/categories/:id", handlers.DeleteCategory)
-
-		// Suppliers
-		public.POST("/suppliers", handlers.CreateSupplier)
-		public.PUT("/suppliers/:id", handlers.UpdateSupplier)
-		public.DELETE("/suppliers/:id", handlers.DeleteSupplier)
-
 		// Warehouses
 		public.POST("/warehouses", handlers.CreateWarehouse)
 		public.PUT("/warehouses/:id", handlers.UpdateWarehouse)
@@ -81,5 +71,17 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		protected.POST("/products", handlers.CreateProduct)
 		protected.PUT("/products/:id", handlers.UpdateProduct)
 		protected.DELETE("/products/:id", handlers.DeleteProduct)
+
+		// Categories
+		protected.GET("/categories", handlers.GetCategories)
+		protected.POST("/categories", handlers.CreateCategory)
+		protected.PUT("/categories/:id", handlers.UpdateCategory)
+		protected.DELETE("/categories/:id", handlers.DeleteCategory)
+
+		// Suppliers
+		protected.GET("/suppliers", handlers.GetSuppliers)
+		protected.POST("/suppliers", handlers.CreateSupplier)
+		protected.PUT("/suppliers/:id", handlers.UpdateSupplier)
+		protected.DELETE("/suppliers/:id", handlers.DeleteSupplier)
 	}
 }
