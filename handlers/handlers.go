@@ -981,18 +981,48 @@ func GetWarehouses(c *gin.Context) {
 
 func UpdateWarehouse(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
+
 	id := c.Param("id")
-	var m models.Warehouse
-	c.ShouldBindJSON(&m)
-	db.Exec("UPDATE warehouses SET name=$1, location=$2 WHERE id=$3", m.Name, m.Location, id)
-	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+
+	var input struct {
+		Name     string `json:"name"`
+		Location string `json:"location"`
+		Capacity int    `json:"capacity"`
+		Manager  string `json:"manager"`
+		Status   string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	_, err := db.Exec(`
+		UPDATE warehouses
+		SET name=$1, location=$2, capacity=$3, manager=$4, status=$5
+		WHERE id=$6
+	`, input.Name, input.Location, input.Capacity, input.Manager, input.Status, id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to update warehouse"})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "Warehouse updated"})
 }
 
 func DeleteWarehouse(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
+
 	id := c.Param("id")
-	db.Exec("DELETE FROM warehouses WHERE id=$1", id)
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+
+	_, err := db.Exec(`DELETE FROM warehouses WHERE id=$1`, id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to delete warehouse"})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "Warehouse deleted"})
 }
 
 func GetSales(c *gin.Context) {
