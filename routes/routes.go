@@ -16,6 +16,42 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		public.POST("/auth/login", handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 
+		// Sales
+		public.POST("/sales", handlers.CreateSale)
+		public.GET("/sales", handlers.GetSales)
+
+		// Products
+		public.POST("/products", handlers.CreateProduct)
+		public.PUT("/products/:id", handlers.UpdateProduct)
+		public.DELETE("/products/:id", handlers.DeleteProduct)
+
+		// Categories
+		public.POST("/categories", handlers.CreateCategory)
+		public.PUT("/categories/:id", handlers.UpdateCategory)
+		public.DELETE("/categories/:id", handlers.DeleteCategory)
+
+		// Suppliers
+		public.POST("/suppliers", handlers.CreateSupplier)
+		public.PUT("/suppliers/:id", handlers.UpdateSupplier)
+		public.DELETE("/suppliers/:id", handlers.DeleteSupplier)
+
+		// Warehouses
+		public.POST("/warehouses", handlers.CreateWarehouse)
+		public.PUT("/warehouses/:id", handlers.UpdateWarehouse)
+		public.DELETE("/warehouses/:id", handlers.DeleteWarehouse)
+
+		// Invoices
+		public.POST("/invoices", handlers.CreateInvoice)
+		public.GET("/invoices", handlers.GetInvoices)
+
+		// Quotations
+		public.POST("/quotations", handlers.CreateQuotation)
+		public.GET("/quotations", handlers.GetQuotations)
+
+		// Receipts
+		public.POST("/receipts", handlers.CreateReceipt)
+		public.GET("/receipts", handlers.GetReceipts)
+
 		public.POST("/seed-all", func(c *gin.Context) {
 			handlers.SeedAll(c, db)
 		})
@@ -39,40 +75,6 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 	api := r.Group("/api")
 	api.Use(handlers.AuthMiddleware())
 	{
-		// Products
-		api.POST("/products", handlers.CreateProduct)
-		api.PUT("/products/:id", handlers.UpdateProduct)
-		api.DELETE("/products/:id", handlers.DeleteProduct)
 
-		// Categories
-		api.POST("/categories", handlers.CreateCategory)
-		api.PUT("/categories/:id", handlers.UpdateCategory)
-		api.DELETE("/categories/:id", handlers.DeleteCategory)
-
-		// Suppliers
-		api.POST("/suppliers", handlers.CreateSupplier)
-		api.PUT("/suppliers/:id", handlers.UpdateSupplier)
-		api.DELETE("/suppliers/:id", handlers.DeleteSupplier)
-
-		// Warehouses
-		api.POST("/warehouses", handlers.CreateWarehouse)
-		api.PUT("/warehouses/:id", handlers.UpdateWarehouse)
-		api.DELETE("/warehouses/:id", handlers.DeleteWarehouse)
-
-		// Sales
-		api.POST("/sales", handlers.CreateSale)
-		api.GET("/sales", handlers.GetSales)
-
-		// Invoices
-		api.POST("/invoices", handlers.CreateInvoice)
-		api.GET("/invoices", handlers.GetInvoices)
-
-		// Quotations
-		api.POST("/quotations", handlers.CreateQuotation)
-		api.GET("/quotations", handlers.GetQuotations)
-
-		// Receipts
-		api.POST("/receipts", handlers.CreateReceipt)
-		api.GET("/receipts", handlers.GetReceipts)
 	}
 }
