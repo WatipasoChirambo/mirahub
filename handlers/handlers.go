@@ -940,6 +940,46 @@ func CreateWarehouse(c *gin.Context) {
 	})
 }
 
+func GetWarehouseStock(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	rows, err := db.Query(`
+		SELECT 
+			w.id,
+			w.name,
+			COALESCE(SUM(p.stock), 0) as total_stock
+		FROM warehouses w
+		LEFT JOIN products p ON p.warehouse_id = w.id
+		GROUP BY w.id, w.name
+		ORDER BY w.id
+	`)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to fetch stock"})
+		return
+	}
+	defer rows.Close()
+
+	var result []gin.H
+
+	for rows.Next() {
+		var id int
+		var name string
+		var totalStock int
+
+		rows.Scan(&id, &name, &totalStock)
+
+		result = append(result, gin.H{
+			"id":          id,
+			"name":        name,
+			"total_stock": totalStock,
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"warehouses": result,
+	})
+}
+
 func GetWarehouses(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
