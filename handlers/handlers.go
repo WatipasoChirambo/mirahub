@@ -447,6 +447,210 @@ func GetProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 
+func CreateCustomer(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	userID := c.GetInt("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var input struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+		Phone string `json:"phone"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	var id int
+	err := db.QueryRow(`
+		INSERT INTO customers (name, email, phone, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id
+	`, input.Name, input.Email, input.Phone, userID).Scan(&id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create customer"})
+		return
+	}
+
+	c.JSON(201, gin.H{
+		"id": id,
+	})
+}
+
+func CreateOrder(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	userID := c.GetInt("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var input struct {
+		CustomerID int `json:"customer_id"`
+		Items      []struct {
+			ProductID int     `json:"product_id"`
+			Quantity  int     `json:"quantity"`
+			Price     float64 `json:"price"`
+		} `json:"items"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Create order
+	var orderID int
+	err = tx.QueryRow(`
+		INSERT INTO orders (customer_id, user_id)
+		VALUES ($1, $2)
+		RETURNING id
+	`, input.CustomerID, userID).Scan(&orderID)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create order"})
+		return
+	}
+
+	// 2. Insert order items + update stock
+	for _, item := range input.Items {
+
+		// Lock product
+		var stock int
+		err := tx.QueryRow(`
+			SELECT stock FROM products WHERE id = $1 FOR UPDATE
+		`, item.ProductID).Scan(&stock)
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Product not found"})
+			return
+		}
+
+		if item.Quantity > stock {
+			c.JSON(400, gin.H{"error": "Insufficient stock"})
+			return
+		}
+
+		// Deduct stock
+		_, err = tx.Exec(`
+			UPDATE products SET stock = stock - $1 WHERE id = $2
+		`, item.Quantity, item.ProductID)
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update stock"})
+			return
+		}
+
+		// Insert order item
+		_, err = tx.Exec(`
+			INSERT INTO order_items (order_id, product_id, quantity, price)
+			VALUES ($1, $2, $3, $4)
+		`, orderID, item.ProductID, item.Quantity, item.Price)
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to insert order items"})
+			return
+		}
+	}
+
+	// Commit
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(201, gin.H{
+		"order_id": orderID,
+	})
+}
+
+func GetOrders(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	rows, err := db.Query(`
+		SELECT id, customer_id, user_id, created_at
+		FROM orders
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to fetch orders"})
+		return
+	}
+	defer rows.Close()
+
+	var orders []map[string]interface{}
+
+	for rows.Next() {
+		var id, customerID, userID int
+		var createdAt string
+
+		rows.Scan(&id, &customerID, &userID, &createdAt)
+
+		orders = append(orders, gin.H{
+			"id":          id,
+			"customer_id": customerID,
+			"user_id":     userID,
+			"created_at":  createdAt,
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"orders": orders,
+	})
+}
+
+func GetCustomers(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	rows, err := db.Query(`
+		SELECT id, name, email, phone, created_at
+		FROM customers
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to fetch customers"})
+		return
+	}
+	defer rows.Close()
+
+	var customers []map[string]interface{}
+
+	for rows.Next() {
+		var id int
+		var name, email, phone string
+		var createdAt string
+
+		rows.Scan(&id, &name, &email, &phone, &createdAt)
+
+		customers = append(customers, gin.H{
+			"id":         id,
+			"name":       name,
+			"email":      email,
+			"phone":      phone,
+			"created_at": createdAt,
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"customers": customers,
+	})
+}
+
 func CreateSale(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
@@ -693,26 +897,86 @@ func DeleteProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
-func GetWarehouses(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
-	rows, _ := db.Query("SELECT id, name, location FROM warehouses")
-	defer rows.Close()
-
-	var list []models.Warehouse
-	for rows.Next() {
-		var m models.Warehouse
-		rows.Scan(&m.ID, &m.Name, &m.Location)
-		list = append(list, m)
-	}
-	c.JSON(http.StatusOK, gin.H{"warehouses": list})
-}
-
 func CreateWarehouse(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
-	var m models.Warehouse
-	c.ShouldBindJSON(&m)
-	db.Exec("INSERT INTO warehouses(name, location) VALUES($1,$2)", m.Name, m.Location)
-	c.JSON(http.StatusCreated, gin.H{"message": "created"})
+
+	userID := c.GetInt("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var input struct {
+		Name     string `json:"name"`
+		Location string `json:"location"`
+		Capacity int    `json:"capacity"`
+		Manager  string `json:"manager"`
+		Status   string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	if input.Status == "" {
+		input.Status = "active"
+	}
+
+	var id int
+	err := db.QueryRow(`
+		INSERT INTO warehouses (name, location, capacity, manager, status)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id
+	`, input.Name, input.Location, input.Capacity, input.Manager, input.Status).Scan(&id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create warehouse"})
+		return
+	}
+
+	c.JSON(201, gin.H{
+		"id": id,
+	})
+}
+
+func GetWarehouses(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	rows, err := db.Query(`
+		SELECT id, name, location, capacity, manager, status, created_at
+		FROM warehouses
+		ORDER BY id DESC
+	`)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to fetch warehouses"})
+		return
+	}
+	defer rows.Close()
+
+	var warehouses []map[string]interface{}
+
+	for rows.Next() {
+		var id, capacity int
+		var name, location, manager, status string
+		var createdAt string
+
+		rows.Scan(&id, &name, &location, &capacity, &manager, &status, &createdAt)
+
+		warehouses = append(warehouses, gin.H{
+			"id":         id,
+			"name":       name,
+			"location":   location,
+			"capacity":   capacity,
+			"manager":    manager,
+			"status":     status,
+			"created_at": createdAt,
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"warehouses": warehouses,
+	})
 }
 
 func UpdateWarehouse(c *gin.Context) {

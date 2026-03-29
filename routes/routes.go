@@ -20,10 +20,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		// public.POST("/sales", handlers.CreateSale)
 		// public.GET("/sales", handlers.GetSales)
 
-		// Warehouses
-		public.POST("/warehouses", handlers.CreateWarehouse)
-		public.PUT("/warehouses/:id", handlers.UpdateWarehouse)
-		public.DELETE("/warehouses/:id", handlers.DeleteWarehouse)
+		public.POST("/orders", handlers.CreateOrder)
 
 		// Invoices
 		public.POST("/invoices", handlers.CreateInvoice)
@@ -83,5 +80,16 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		protected.POST("/suppliers", handlers.CreateSupplier)
 		protected.PUT("/suppliers/:id", handlers.UpdateSupplier)
 		protected.DELETE("/suppliers/:id", handlers.DeleteSupplier)
+
+		// Warehouses
+		protected.GET("/warehouses", handlers.GetWarehouses)
+		protected.POST("/warehouses", handlers.CreateWarehouse)
+		protected.PUT("/warehouses/:id", handlers.UpdateWarehouse)
+		protected.DELETE("/warehouses/:id", handlers.DeleteWarehouse)
+
+		protected.POST("/customers", handlers.CreateCustomer)
+		protected.GET("/customers", handlers.GetCustomers)
+
+		protected.GET("/orders", handlers.GetOrders)
 	}
 }

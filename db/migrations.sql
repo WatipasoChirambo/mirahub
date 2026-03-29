@@ -37,7 +37,11 @@ CREATE TABLE users (
 CREATE TABLE warehouses (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    location TEXT
+    location TEXT,
+    capacity INT,
+    manager VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Products
@@ -54,6 +58,31 @@ CREATE TABLE products (
     stock INT DEFAULT 0,
     price NUMERIC(10,2) DEFAULT 0.00,
     created_by INT REFERENCES users(id) ON DELETE SET NULL
+);
+
+
+CREATE TABLE customers (
+  id SERIAL PRIMARY KEY,
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  customer_id INT,
+  user_id INT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE order_items (
+  id SERIAL PRIMARY KEY,
+  order_id INT,
+  product_id INT,
+  quantity INT,
+  price NUMERIC
 );
 
 -- Sales
@@ -75,7 +104,7 @@ CREATE TABLE invoices (
     total NUMERIC(10,2)
 );
 
--- Quotations
+-- Quotations   
 CREATE TABLE quotations (
     id SERIAL PRIMARY KEY,
     product_id INT REFERENCES products(id) ON DELETE CASCADE,

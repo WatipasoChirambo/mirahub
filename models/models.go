@@ -20,6 +20,9 @@ type Warehouse struct {
 	ID       int    `db:"id" json:"id"`
 	Name     string `db:"name" json:"name"`
 	Location string `db:"location" json:"location"`
+	Capacity int    `db:"capacity" json:"capacity"`
+	Manager  string `db:"manager" json:"manager"`
+	Status   string `db:"status" json:"status"`
 }
 
 // Users
@@ -98,4 +101,29 @@ type Receipt struct {
 	UserID      int       `db:"user_id" json:"user_id"` // user who received payment
 	ReceiptDate time.Time `db:"receipt_date" json:"receipt_date"`
 	Amount      float64   `db:"amount" json:"amount"`
+}
+
+// Customers
+type Customer struct {
+	ID        int       `db:"id" json:"id"`
+	Name      string    `db:"name" json:"name"`
+	Email     string    `db:"email" json:"email"`
+	Phone     string    `db:"phone" json:"phone"`
+	CreatedBy int       `db:"created_by" json:"created_by"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+type Order struct {
+	ID         int       `db:"id" json:"id"`
+	CustomerID int       `db:"customer_id" json:"customer_id"`
+	UserID     int       `db:"user_id" json:"user_id"` // who created the order
+	OrderDate  time.Time `db:"order_date" json:"order_date"`
+}
+
+type OrderItem struct {
+	ID        int     `db:"id" json:"id"`
+	OrderID   int     `db:"order_id" json:"order_id"`
+	ProductID int     `db:"product_id" json:"product_id"`
+	Quantity  int     `db:"quantity" json:"quantity"`
+	Price     float64 `db:"price" json:"price"` // price at time of order
 }
