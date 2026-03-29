@@ -60,10 +60,10 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 			handlers.SeedProducts(c, db)
 		})
 
-		public.GET("/products", handlers.GetProducts)
-		public.GET("/categories", handlers.GetCategories)
-		public.GET("/suppliers", handlers.GetSuppliers)
-		public.GET("/warehouses", handlers.GetWarehouses)
+		// public.GET("/products", handlers.GetProducts)
+		// public.GET("/categories", handlers.GetCategories)
+		// public.GET("/suppliers", handlers.GetSuppliers)
+		// public.GET("/warehouses", handlers.GetWarehouses)
 	}
 
 	// Authenticated routes
