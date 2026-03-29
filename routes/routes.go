@@ -77,8 +77,8 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		protected.GET("/sales", handlers.GetSales)
 
 		// Products
-		public.POST("/products", handlers.CreateProduct)
-		public.PUT("/products/:id", handlers.UpdateProduct)
-		public.DELETE("/products/:id", handlers.DeleteProduct)
+		protected.POST("/products", handlers.CreateProduct)
+		protected.PUT("/products/:id", handlers.UpdateProduct)
+		protected.DELETE("/products/:id", handlers.DeleteProduct)
 	}
 }
