@@ -17,8 +17,8 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		public.POST("/auth/logout", handlers.Logout)
 
 		// Sales
-		public.POST("/sales", handlers.CreateSale)
-		public.GET("/sales", handlers.GetSales)
+		// public.POST("/sales", handlers.CreateSale)
+		// public.GET("/sales", handlers.GetSales)
 
 		// Products
 		public.POST("/products", handlers.CreateProduct)
@@ -73,8 +73,11 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 
 	// Authenticated routes
 	api := r.Group("/api")
-	api.Use(handlers.AuthMiddleware())
+	// 🔒 Protected routes
+	protected := api.Group("/")
+	protected.Use(handlers.AuthMiddleware())
 	{
-
+		protected.POST("/sales", handlers.CreateSale)
+		protected.GET("/sales", handlers.GetSales)
 	}
 }

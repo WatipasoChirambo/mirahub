@@ -452,10 +452,6 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Get authenticated user
 	userID := c.GetInt("user_id")
-	if userID == 0 {
-		c.JSON(401, gin.H{"error": "Unauthorized"})
-		return
-	}
 
 	// ✅ Input struct (DO NOT include user_id)
 	var input struct {
