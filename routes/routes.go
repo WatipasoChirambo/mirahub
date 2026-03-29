@@ -20,11 +20,6 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		// public.POST("/sales", handlers.CreateSale)
 		// public.GET("/sales", handlers.GetSales)
 
-		// Products
-		public.POST("/products", handlers.CreateProduct)
-		public.PUT("/products/:id", handlers.UpdateProduct)
-		public.DELETE("/products/:id", handlers.DeleteProduct)
-
 		// Categories
 		public.POST("/categories", handlers.CreateCategory)
 		public.PUT("/categories/:id", handlers.UpdateCategory)
@@ -77,7 +72,13 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 	protected := api.Group("/")
 	protected.Use(handlers.AuthMiddleware())
 	{
+		// Sales
 		protected.POST("/sales", handlers.CreateSale)
 		protected.GET("/sales", handlers.GetSales)
+
+		// Products
+		public.POST("/products", handlers.CreateProduct)
+		public.PUT("/products/:id", handlers.UpdateProduct)
+		public.DELETE("/products/:id", handlers.DeleteProduct)
 	}
 }
