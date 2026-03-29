@@ -447,14 +447,41 @@ func GetProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 
-func CreateCustomer(c *gin.Context) {
+func GetCustomerByID(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
+	id := c.Param("id")
 
-	userID := c.GetInt("user_id")
-	if userID == 0 {
-		c.JSON(401, gin.H{"error": "Unauthorized"})
+	var cust models.Customer
+
+	err := db.QueryRow(`
+        SELECT id, name, email, phone, created_by, created_at
+        FROM customers
+        WHERE id = $1
+    `, id).Scan(
+		&cust.ID,
+		&cust.Name,
+		&cust.Email,
+		&cust.Phone,
+		&cust.CreatedBy,
+		&cust.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		c.JSON(404, gin.H{"error": "Customer not found"})
 		return
 	}
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to fetch customer: " + err.Error()})
+		return
+	}
+
+	c.JSON(200, cust)
+}
+
+func UpdateCustomer(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+	id := c.Param("id")
 
 	var input struct {
 		Name  string `json:"name"`
@@ -467,20 +494,147 @@ func CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	var id int
-	err := db.QueryRow(`
-		INSERT INTO customers (name, email, phone, created_by)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id
-	`, input.Name, input.Email, input.Phone, userID).Scan(&id)
+	res, err := db.Exec(`
+        UPDATE customers
+        SET name = $1, email = $2, phone = $3
+        WHERE id = $4
+    `, input.Name, input.Email, input.Phone, id)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to create customer"})
+		c.JSON(500, gin.H{"error": "Failed to update customer: " + err.Error()})
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(404, gin.H{"error": "Customer not found"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "Customer updated",
+		"id":      id,
+	})
+}
+
+func DeleteCustomer(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+	id := c.Param("id")
+
+	res, err := db.Exec(`
+        DELETE FROM customers
+        WHERE id = $1
+    `, id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to delete customer: " + err.Error()})
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(404, gin.H{"error": "Customer not found"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "Customer deleted",
+		"id":      id,
+	})
+}
+
+func CreateCustomer(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	var input struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+		Phone string `json:"phone"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	// Authenticated user
+	createdBy := c.GetInt("user_id")
+
+	var id int
+	err := db.QueryRow(`
+        INSERT INTO customers (name, email, phone, created_by)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+    `, input.Name, input.Email, input.Phone, createdBy).Scan(&id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create customer: " + err.Error()})
 		return
 	}
 
 	c.JSON(201, gin.H{
-		"id": id,
+		"message": "Customer created",
+		"id":      id,
+	})
+}
+
+func GetCustomers(c *gin.Context) {
+	db := c.MustGet("db").(*sql.DB)
+
+	rows, err := db.Query(`
+        SELECT 
+            id,
+            name,
+            email,
+            phone,
+            created_by,
+            created_at
+        FROM customers
+        ORDER BY id ASC
+    `)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Database query failed: " + err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	customers := []models.Customer{}
+
+	for rows.Next() {
+		var cust models.Customer
+
+		err := rows.Scan(
+			&cust.ID,
+			&cust.Name,
+			&cust.Email,
+			&cust.Phone,
+			&cust.CreatedBy,
+			&cust.CreatedAt,
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Scan error: " + err.Error(),
+			})
+			return
+		}
+
+		customers = append(customers, cust)
+	}
+
+	// ✅ Check for iteration errors
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Row iteration failed: " + err.Error(),
+		})
+		return
+	}
+
+	// ✅ Same format as GetProducts
+	c.JSON(http.StatusOK, gin.H{
+		"customers": customers,
 	})
 }
 
@@ -614,40 +768,38 @@ func GetOrders(c *gin.Context) {
 	})
 }
 
-func GetCustomers(c *gin.Context) {
+func CreateCustomers(c *gin.Context) {
 	db := c.MustGet("db").(*sql.DB)
 
-	rows, err := db.Query(`
-		SELECT id, name, email, phone, created_at
-		FROM customers
-		ORDER BY created_at DESC
-	`)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to fetch customers"})
+	var input struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+		Phone string `json:"phone"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
 		return
 	}
-	defer rows.Close()
 
-	var customers []map[string]interface{}
+	// Authenticated user
+	createdBy := c.GetInt("user_id")
 
-	for rows.Next() {
-		var id int
-		var name, email, phone string
-		var createdAt string
+	var id int
+	err := db.QueryRow(`
+        INSERT INTO customers (name, email, phone, created_by)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+    `, input.Name, input.Email, input.Phone, createdBy).Scan(&id)
 
-		rows.Scan(&id, &name, &email, &phone, &createdAt)
-
-		customers = append(customers, gin.H{
-			"id":         id,
-			"name":       name,
-			"email":      email,
-			"phone":      phone,
-			"created_at": createdAt,
-		})
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create customer: " + err.Error()})
+		return
 	}
 
-	c.JSON(200, gin.H{
-		"customers": customers,
+	c.JSON(201, gin.H{
+		"message": "Customer created",
+		"id":      id,
 	})
 }
 
