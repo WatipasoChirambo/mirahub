@@ -863,16 +863,17 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Insert sale
 	var saleID int
-	var saleDate string
+	var saleDate time.Time
+	var total = input.Price * float64(input.Quantity)
 
 	err = tx.QueryRow(`
-		INSERT INTO sales (product_id, user_id, quantity, price)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO sales (product_id, user_id, quantity, price, total)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, sale_date
-	`, input.ProductID, userID, input.Quantity, input.Price).Scan(&saleID, &saleDate)
+	`, input.ProductID, userID, input.Quantity, input.Price, total).Scan(&saleID, &saleDate)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to create sale"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -890,6 +891,7 @@ func CreateSale(c *gin.Context) {
 		"quantity":   input.Quantity,
 		"price":      input.Price,
 		"sale_date":  saleDate,
+		"total":      total,
 	})
 }
 

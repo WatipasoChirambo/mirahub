@@ -85,14 +85,14 @@ CREATE TABLE order_items (
   price NUMERIC
 );
 
--- Sales
 CREATE TABLE sales (
     id SERIAL PRIMARY KEY,
     product_id INT REFERENCES products(id) ON DELETE CASCADE,
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
     quantity INT NOT NULL,
     price NUMERIC(10,2) NOT NULL,
-    sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total NUMERIC(10,2)
 );
 
 -- Invoices

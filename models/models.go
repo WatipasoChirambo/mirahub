@@ -60,6 +60,7 @@ type Sale struct {
 	Quantity  int       `db:"quantity" json:"quantity"`
 	Price     float64   `db:"price" json:"price"` // price at the time of sale
 	SaleDate  time.Time `db:"sale_date" json:"sale_date"`
+	Total     float64   `db:"total" json:"total"`
 }
 
 type SaleResponse struct {
@@ -74,6 +75,7 @@ type SaleResponse struct {
 
 	CreatedByID       *int    `json:"created_by_id"`
 	CreatedByUsername *string `json:"created_by_username"`
+	Total             float64 `db:"total" json:"total"`
 }
 
 // Invoices
