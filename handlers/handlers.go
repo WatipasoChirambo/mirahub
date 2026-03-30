@@ -340,7 +340,9 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
-			secret = "supersecretkey"
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "JWT secret not configured"})
+			c.Abort()
+			return
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -366,9 +368,21 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// ✅ Safely extract fields
-		if uid, ok := claims["user_id"].(float64); ok {
-			c.Set("user_id", int(uid))
+		uidRaw, exists := claims["user_id"]
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id missing in token"})
+			c.Abort()
+			return
 		}
+
+		uidFloat, ok := uidRaw.(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user_id type"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", int(uidFloat))
 
 		if username, ok := claims["username"].(string); ok {
 			c.Set("username", username)
