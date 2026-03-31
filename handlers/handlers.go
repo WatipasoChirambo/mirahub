@@ -853,7 +853,11 @@ func CreateSale(c *gin.Context) {
 	`, input.ProductID).Scan(&stock)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Product not found"})
+		if err == sql.ErrNoRows {
+			c.JSON(404, gin.H{"error": "Product not found"})
+		} else {
+			c.JSON(500, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
