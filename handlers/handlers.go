@@ -854,7 +854,7 @@ func CreateSale(c *gin.Context) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(404, gin.H{"error": "Product not found"})
+			c.JSON(500, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(500, gin.H{"error": err.Error()})
 		}
@@ -863,7 +863,7 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Check stock
 	if input.Quantity > stock {
-		c.JSON(400, gin.H{"error": "Insufficient stock"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -875,7 +875,7 @@ func CreateSale(c *gin.Context) {
 	`, input.Quantity, input.ProductID)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to update stock"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -897,7 +897,7 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Commit transaction
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Transaction commit failed"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
