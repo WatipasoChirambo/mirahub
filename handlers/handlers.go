@@ -822,8 +822,12 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Get authenticated user
 	userID := c.GetInt("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
 
-	// ✅ Input struct (DO NOT include user_id)
+	// ✅ Input struct
 	var input struct {
 		ProductID int     `json:"product_id"`
 		Quantity  int     `json:"quantity"`
@@ -835,15 +839,27 @@ func CreateSale(c *gin.Context) {
 		return
 	}
 
+	// ✅ Basic validation
+	if input.ProductID <= 0 || input.Quantity <= 0 || input.Price <= 0 {
+		c.JSON(400, gin.H{"error": "Invalid product_id, quantity, or price"})
+		return
+	}
+
 	// ✅ Start transaction
 	tx, err := db.Begin()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to start transaction"})
 		return
 	}
-	defer tx.Rollback()
 
-	// ✅ Lock product row (prevents overselling)
+	// Ensure rollback on failure
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// ✅ Lock product row
 	var stock int
 	err = tx.QueryRow(`
 		SELECT stock 
@@ -854,7 +870,7 @@ func CreateSale(c *gin.Context) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(500, gin.H{"error": err.Error()})
+			c.JSON(404, gin.H{"error": "Product not found"})
 		} else {
 			c.JSON(500, gin.H{"error": err.Error()})
 		}
@@ -863,7 +879,7 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Check stock
 	if input.Quantity > stock {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(400, gin.H{"error": "Insufficient stock"})
 		return
 	}
 
@@ -879,10 +895,12 @@ func CreateSale(c *gin.Context) {
 		return
 	}
 
+	// ✅ Calculate total
+	total := input.Price * float64(input.Quantity)
+
 	// ✅ Insert sale
 	var saleID int
 	var saleDate time.Time
-	var total = input.Price * float64(input.Quantity)
 
 	err = tx.QueryRow(`
 		INSERT INTO sales (product_id, user_id, quantity, price, total)
@@ -891,12 +909,15 @@ func CreateSale(c *gin.Context) {
 	`, input.ProductID, userID, input.Quantity, input.Price, total).Scan(&saleID, &saleDate)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{
+			"error":   "Insert failed",
+			"details": err.Error(),
+		})
 		return
 	}
 
 	// ✅ Commit transaction
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
