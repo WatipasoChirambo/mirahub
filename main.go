@@ -13,7 +13,6 @@ import (
 )
 
 func main() {
-	// Set production mode
 	gin.SetMode(gin.ReleaseMode)
 
 	// Build DSN
@@ -33,7 +32,7 @@ func main() {
 			"@" + host + ":" + port + "/" + name + "?sslmode=require"
 	}
 
-	// Connect to DB
+	// Connect DB
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
@@ -41,6 +40,7 @@ func main() {
 	defer db.Close()
 
 	log.Println("Connected to DB")
+	log.Println("JWT_SECRET =", os.Getenv("JWT_SECRET"))
 
 	// Router
 	r := gin.Default()
@@ -56,16 +56,16 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Inject DB
+	// Inject DB (FIXED)
 	r.Use(func(c *gin.Context) {
-		c.Set("db", db.DB)
+		c.Set("db", db)
 		c.Next()
 	})
 
 	// Routes
 	routes.SetupRoutes(r, db)
 
-	// Port (Railway)
+	// Port
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

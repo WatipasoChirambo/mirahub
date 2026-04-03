@@ -19,6 +19,7 @@ services:
       - "8080:8080"
     environment:
       DATABASE_URL: postgres://mirahub:mirahub123@db:5432/mirahub?sslmode=disable
+      JWT_SECRET: supersecretkey
     depends_on:
       - db
     command: [ "./mirahub-app" ]

@@ -37,62 +37,172 @@ type RegisterRequest struct {
 func Register(c *gin.Context) {
 	var req RegisterRequest
 
-	// Validate JSON input
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	// Basic validation
+	db := c.MustGet("db").(*sqlx.DB)
+
 	if req.Username == "" || req.Password == "" || req.Email == "" || req.Phone == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, phone, and password are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "All fields required"})
 		return
 	}
 
-	db := c.MustGet("db").(*sql.DB)
-
-	// Check if username, email, or phone already exists
 	var exists bool
-	err := db.QueryRow(
-		`SELECT EXISTS(
-			SELECT 1 FROM users WHERE username=$1 OR email=$2 OR phone=$3
-		)`,
-		req.Username, req.Email, req.Phone,
-	).Scan(&exists)
+	err := db.Get(&exists, `
+		SELECT EXISTS(
+			SELECT 1 FROM users 
+			WHERE username=$1 OR email=$2 OR phone=$3
+		)
+	`, req.Username, req.Email, req.Phone)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
 	if exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, or phone already exists"})
+		c.JSON(400, gin.H{"error": "User already exists"})
 		return
 	}
 
-	// Hash password
-	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+
+	_, err = db.Exec(`
+		INSERT INTO users(username,email,phone,password_hash,role)
+		VALUES($1,$2,$3,$4,$5)
+	`, req.Username, req.Email, req.Phone, string(hash), "user")
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not hash password"})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Insert new user
-	_, err = db.Exec(
-		`INSERT INTO users(username, email, phone, password_hash, role)
-		 VALUES ($1,$2,$3,$4,$5)`,
-		req.Username,
-		req.Email,
-		req.Phone,
-		string(hashed),
-		"user",
-	)
+	c.JSON(201, gin.H{"message": "User registered"})
+}
+
+func SeedVehiclesAndProducts(db *sqlx.DB) error {
+	tx := db.MustBegin()
+
+	// Step 1: Insert vehicles
+	vehicles := []string{
+		"Toyota Prius",
+		"Toyota Aqua",
+		"Ford Ranger",
+		"Toyota Hiace",
+	}
+
+	var vehicleIDs = make(map[string]int)
+
+	for _, v := range vehicles {
+		var id int
+		err := tx.QueryRow(`
+			INSERT INTO vehicles (name)
+			VALUES ($1)
+			ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+			RETURNING id
+		`, v).Scan(&id)
+
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		vehicleIDs[v] = id
+	}
+
+	// Step 2: Insert product
+	var productID int
+	err := tx.QueryRow(`
+		INSERT INTO products (code, item_code, hold, name, category_id, supplier_id, warehouse_id, stock, price, created_by, image_url)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		ON CONFLICT (code) DO NOTHING
+		RETURNING id
+	`,
+		"Z80", "OF23", "A1-1B", "Oil Filter", 1, 1, 1, 0, 0.00, 1, "/uploads/products/oil.jpg",
+	).Scan(&productID)
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create user"})
-		return
+		tx.Rollback()
+		return err
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+	// Step 3: Link product to vehicles
+	productVehicles := []string{
+		"Toyota Prius",
+		"Toyota Aqua",
+	}
+
+	for _, v := range productVehicles {
+		_, err := tx.Exec(`
+			INSERT INTO product_vehicles (product_id, vehicle_id)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, productID, vehicleIDs[v])
+
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func AttachVehicle(db *sqlx.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		productID := c.Param("id")
+
+		var req struct {
+			VehicleID int `json:"vehicle_id"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO product_vehicles (product_id, vehicle_id)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, productID, req.VehicleID)
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"message": "vehicle attached"})
+	}
+}
+
+func DetachVehicle(db *sqlx.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		productID := c.Param("id")
+
+		var req struct {
+			VehicleID int `json:"vehicle_id"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, err := db.Exec(`
+			DELETE FROM product_vehicles
+			WHERE product_id = $1 AND vehicle_id = $2
+		`, productID, req.VehicleID)
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"message": "vehicle detached"})
+	}
 }
 
 func SeedAll(c *gin.Context, db *sqlx.DB) {
@@ -287,7 +397,8 @@ func Login(c *gin.Context) {
 
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "supersecretkey"
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "JWT secret not configured"})
+		return
 	}
 
 	tokenString, err := token.SignedString([]byte(secret))
@@ -396,38 +507,37 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// -------------------- Products --------------------
-
 func GetProducts(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
-        SELECT 
-            id, 
-            code, 
-            name, 
-            category_id, 
-            supplier_id, 
-            warehouse_id,
-            stock, 
-            price, 
-            hold, 
-            vehicle, 
-            item_code, 
-            created_by
-        FROM products
-        ORDER BY id ASC
-    `)
+		SELECT 
+			p.id, p.code, p.name,
+			p.category_id, p.supplier_id, p.warehouse_id,
+			p.stock, p.price, p.hold, p.item_code,
+			p.image_url,
+			p.created_by,
+			v.id, v.name
+		FROM products p
+		LEFT JOIN product_vehicles pv ON pv.product_id = p.id
+		LEFT JOIN vehicles v ON v.id = pv.vehicle_id
+		ORDER BY p.id
+	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed: " + err.Error()})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 	defer rows.Close()
 
-	products := []models.Product{}
+	productMap := make(map[int]*models.Product)
 
 	for rows.Next() {
-		var p models.Product
+		var (
+			p           models.Product
+			vehicleID   sql.NullInt64
+			vehicleName sql.NullString
+			imageURL    sql.NullString
+		)
 
 		err := rows.Scan(
 			&p.ID,
@@ -439,26 +549,143 @@ func GetProducts(c *gin.Context) {
 			&p.Stock,
 			&p.Price,
 			&p.Hold,
-			&p.Vehicle,
 			&p.ItemCode,
+			&imageURL,
 			&p.CreatedBy,
+			&vehicleID,
+			&vehicleName,
 		)
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Scan error: " + err.Error()})
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
-		products = append(products, p)
+		if imageURL.Valid {
+			p.ImageURL = imageURL.String
+		}
+
+		if _, exists := productMap[p.ID]; !exists {
+			p.Vehicles = []models.Vehicle{}
+			productMap[p.ID] = &p
+		}
+
+		if vehicleID.Valid {
+			productMap[p.ID].Vehicles = append(productMap[p.ID].Vehicles, models.Vehicle{
+				ID:   int(vehicleID.Int64),
+				Name: vehicleName.String,
+			})
+		}
 	}
 
-	// ✅ Check iteration errors
-	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Row iteration failed: " + err.Error()})
+	var products []models.Product
+	for _, p := range productMap {
+		products = append(products, *p)
+	}
+
+	c.JSON(200, gin.H{"products": products})
+}
+
+func nullInt(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func nullFloat(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func CreateProduct(c *gin.Context) {
+	db := c.MustGet("db").(*sqlx.DB)
+
+	code := c.PostForm("code")
+	itemCode := c.PostForm("item_code")
+	name := c.PostForm("name")
+
+	categoryID := c.PostForm("category_id")
+	supplierID := c.PostForm("supplier_id")
+	warehouseID := c.PostForm("warehouse_id")
+	stock := c.PostForm("stock")
+	price := c.PostForm("price")
+	hold := c.PostForm("hold")
+	createdBy := c.PostForm("created_by")
+
+	// ✅ Image upload
+	file, _ := c.FormFile("image")
+	var imageURL string
+
+	if file != nil {
+		path := "./uploads/products/" + file.Filename
+		if err := c.SaveUploadedFile(file, path); err != nil {
+			c.JSON(500, gin.H{"error": "image upload failed"})
+			return
+		}
+		imageURL = "/uploads/products/" + file.Filename
+	}
+
+	vehicleIDs := c.PostFormArray("vehicle_ids")
+
+	tx, err := db.Beginx()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"products": products})
+	var productID int
+	err = tx.QueryRow(`
+		INSERT INTO products 
+		(code,item_code,name,category_id,supplier_id,warehouse_id,stock,price,hold,created_by,image_url)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		RETURNING id
+	`,
+		code,
+		itemCode,
+		name,
+		nullInt(categoryID),
+		nullInt(supplierID),
+		nullInt(warehouseID),
+		nullInt(stock),
+		nullFloat(price),
+		hold,
+		nullInt(createdBy),
+		imageURL,
+	).Scan(&productID)
+
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ✅ Link vehicles
+	for _, vid := range vehicleIDs {
+		_, err := tx.Exec(`
+			INSERT INTO product_vehicles(product_id, vehicle_id)
+			VALUES ($1,$2)
+			ON CONFLICT DO NOTHING
+		`, productID, vid)
+
+		if err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(201, gin.H{
+		"message": "product created",
+		"id":      productID,
+	})
 }
 
 func GetCustomerByID(c *gin.Context) {
@@ -1054,20 +1281,6 @@ func DeleteSupplier(c *gin.Context) {
 	id := c.Param("id")
 	db.Exec("DELETE FROM suppliers WHERE id=$1", id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
-}
-
-func CreateProduct(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
-	userID := c.GetInt("user_id")
-
-	var p models.Product
-	c.ShouldBindJSON(&p)
-
-	db.Exec(`INSERT INTO products(code,name,category_id,supplier_id,warehouse_id,stock,created_by)
-	         VALUES($1,$2,$3,$4,$5,$6,$7)`,
-		p.Code, p.Name, p.CategoryID, p.SupplierID, p.WarehouseID, p.Stock, userID)
-
-	c.JSON(http.StatusCreated, gin.H{"message": "created"})
 }
 
 func UpdateProduct(c *gin.Context) {

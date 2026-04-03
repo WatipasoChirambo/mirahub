@@ -36,20 +36,28 @@ type User struct {
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
+type Vehicle struct {
+	ID   int    `db:"id" json:"id"`
+	Name string `db:"name" json:"name"`
+}
+
 // Products
 type Product struct {
 	ID          int     `db:"id" json:"id"`
 	Code        string  `db:"code" json:"code"`
+	ItemCode    string  `db:"item_code" json:"item_code"`
+	Hold        string  `db:"hold" json:"hold"`
 	Name        string  `db:"name" json:"name"`
 	CategoryID  int     `db:"category_id" json:"category_id"`
 	SupplierID  int     `db:"supplier_id" json:"supplier_id"`
 	WarehouseID int     `db:"warehouse_id" json:"warehouse_id"`
 	Stock       int     `db:"stock" json:"stock"`
-	Price       float64 `db:"price" json:"price"`         // ✅ Per unit
-	Hold        string  `db:"hold" json:"hold"`           // ✅ NEW
-	Vehicle     string  `db:"vehicle" json:"vehicle"`     // ✅ NEW
-	ItemCode    string  `db:"item_code" json:"item_code"` // ✅ NEW
+	Price       float64 `db:"price" json:"price"`
 	CreatedBy   int     `db:"created_by" json:"created_by"`
+	ImageURL    string  `db:"image_url" json:"image_url"`
+
+	// Many-to-many
+	Vehicles []Vehicle `json:"vehicles"`
 }
 
 // Sales
