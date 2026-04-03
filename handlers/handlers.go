@@ -366,7 +366,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	log.Println("🔍 LOGIN HANDLER RUNNING WITH IDENTIFIER:", req.Identifier)
 
