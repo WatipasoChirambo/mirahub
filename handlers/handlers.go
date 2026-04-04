@@ -82,7 +82,7 @@ func QuoteHandler(c *gin.Context) {
 
 	// 4. Create the Request
 	params := &resend.SendEmailRequest{
-		From:    "onboarding@resend.dev", // Replace with your verified domain in production
+		From:    "contact@mirahubautoparts.com", // Replace with your verified domain in production
 		To:      []string{emailUser},
 		Cc:      []string{"watichirambo@gmail.com"},
 		ReplyTo: form.Email,
@@ -124,7 +124,7 @@ func ContactHandler(c *gin.Context) {
 
 	// 3. Prepare the Email
 	params := &resend.SendEmailRequest{
-		From:    "onboarding@resend.dev", // Replace with your verified domain in production
+		From:    "contact@mirahubautoparts.com", // Replace with your verified domain in production
 		To:      []string{os.Getenv("EMAIL_USER")},
 		Cc:      []string{"watichirambo@gmail.com"},
 		Subject: form.Subject,
