@@ -14,8 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/resend/resend-go/v3"
 	"golang.org/x/crypto/bcrypt"
-	"gopkg.in/gomail.v2"
 )
 
 // -------------------- Auth --------------------
@@ -53,93 +53,88 @@ type QuoteForm struct {
 func QuoteHandler(c *gin.Context) {
 	var form QuoteForm
 
-	if err := c.ShouldBindJSON(&form); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid request"})
-		return
-	}
-
-	emailUser := os.Getenv("EMAIL_USER")
-	emailPass := os.Getenv("EMAIL_PASS")
-
-	if emailUser == "" || emailPass == "" {
-		c.JSON(500, gin.H{"error": "Email config not set"})
-		return
-	}
-
-	m := gomail.NewMessage()
-
-	m.SetHeader("From", emailUser)
-	m.SetHeader("To", emailUser)
-	m.SetHeader("Reply-To", form.Email)
-	m.SetHeader("Subject", "New Quote Request from "+form.Name)
-
-	m.SetBody("text/html", `
-		<h2>New Quote Request</h2>
-		<p><strong>Name:</strong> `+form.Name+`</p>
-		<p><strong>Email:</strong> `+form.Email+`</p>
-		<p><strong>Phone:</strong> `+form.Phone+`</p>
-		<p><strong>Company:</strong> `+form.Company+`</p>
-		<p><strong>Parts:</strong><br/>`+form.Parts+`</p>
-		<p><strong>Notes:</strong><br/>`+form.Notes+`</p>
-	`)
-
-	d := gomail.NewDialer(
-		"smtp.gmail.com",
-		587,
-		emailUser,
-		emailPass,
-	)
-
-	if err := d.DialAndSend(m); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(200, gin.H{"message": "Quote request sent"})
-}
-
-func ContactHandler(c *gin.Context) {
-	var form ContactForm
-
-	// Parse JSON
+	// 1. Parse JSON
 	if err := c.ShouldBindJSON(&form); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	emailUser := os.Getenv("EMAIL_USER")
-	emailPass := os.Getenv("EMAIL_PASS")
+	// 2. Setup Resend Client
+	apiKey := os.Getenv("RESEND_API_KEY")
+	emailUser := os.Getenv("EMAIL_USER") // Your receiving email
 
-	// Basic validation
-	if emailUser == "" || emailPass == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email config not set"})
+	if apiKey == "" || emailUser == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email configuration missing"})
+		return
+	}
+	client := resend.NewClient(apiKey)
+
+	// 3. Prepare the HTML Body
+	htmlContent := fmt.Sprintf(`
+        <h2>New Quote Request</h2>
+        <p><strong>Name:</strong> %s</p>
+        <p><strong>Email:</strong> %s</p>
+        <p><strong>Phone:</strong> %s</p>
+        <p><strong>Company:</strong> %s</p>
+        <p><strong>Parts:</strong><br/>%s</p>
+        <p><strong>Notes:</strong><br/>%s</p>
+    `, form.Name, form.Email, form.Phone, form.Company, form.Parts, form.Notes)
+
+	// 4. Create the Request
+	params := &resend.SendEmailRequest{
+		From:    "onboarding@resend.dev", // Replace with your verified domain in production
+		To:      []string{emailUser},
+		ReplyTo: form.Email,
+		Subject: "New Quote Request from " + form.Name,
+		Html:    htmlContent,
+	}
+
+	// 5. Send
+	sent, err := client.Emails.Send(params)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	m := gomail.NewMessage()
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Quote request sent",
+		"email_id": sent.Id,
+	})
+}
 
-	// Proper headers (important for Gmail)
-	m.SetHeader("From", emailUser)
-	m.SetHeader("To", emailUser)
-	m.SetHeader("Reply-To", form.Email) // 👈 allows replying to user
-	m.SetHeader("Subject", form.Subject)
+func ContactHandler(c *gin.Context) {
+	var form ContactForm
 
-	m.SetBody("text/plain",
-		"Name: "+form.Name+"\n"+
-			"Email: "+form.Email+"\n\n"+
-			"Message:\n"+form.Message,
-	)
+	// 1. Parse JSON
+	if err := c.ShouldBindJSON(&form); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
 
-	d := gomail.NewDialer(
-		"smtp.gmail.com",
-		587,
-		emailUser,
-		emailPass,
-	)
+	// 2. Initialize Resend Client
+	// Ideally, move the client initialization outside this handler for better performance
+	apiKey := os.Getenv("RESEND_API_KEY")
+	if apiKey == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Resend API key not set"})
+		return
+	}
+	client := resend.NewClient(apiKey)
 
-	// Send email
-	if err := d.DialAndSend(m); err != nil {
-		// 👇 IMPORTANT: return real error for debugging
+	// 3. Prepare the Email
+	params := &resend.SendEmailRequest{
+		From:    "onboarding@resend.dev", // Replace with your verified domain in production
+		To:      []string{os.Getenv("EMAIL_USER")},
+		Subject: form.Subject,
+		ReplyTo: form.Email,
+		Text: fmt.Sprintf(
+			"Name: %s\nEmail: %s\n\nMessage:\n%s",
+			form.Name, form.Email, form.Message,
+		),
+	}
+
+	// 4. Send Email
+	sent, err := client.Emails.Send(params)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -147,7 +142,8 @@ func ContactHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Email sent successfully",
+		"message":  "Email sent successfully",
+		"email_id": sent.Id,
 	})
 }
 

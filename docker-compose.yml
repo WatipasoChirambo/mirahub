@@ -22,6 +22,7 @@ services:
       JWT_SECRET: supersecretkey
       EMAIL_USER: watipasochirambo5@gmail.com
       EMAIL_PASS: sdhicazyhkcvcxcv
+      RESEND_API_KEY: re_AfhLcttG_HN9XnQTBkvZXjARSQ7FYL4PK
     depends_on:
       - db
     command: [ "./mirahub-app" ]
