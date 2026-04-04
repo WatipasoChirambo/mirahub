@@ -406,20 +406,25 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 // SeedProducts creates 5 dummy products
 func SeedProducts(c *gin.Context, db *sqlx.DB) {
+
+	createdBy := 1 // ✅ real user ID
 	products := []models.Product{
-		{Code: "P001", Name: "Laptop", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 10, CreatedBy: 1},
-		{Code: "P002", Name: "Keyboard", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 15, CreatedBy: 1},
-		{Code: "P003", Name: "Mouse", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 20, CreatedBy: 1},
-		{Code: "P004", Name: "Monitor", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 5, CreatedBy: 1},
-		{Code: "P005", Name: "Printer", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 8, CreatedBy: 1},
+		{Code: "P001", Name: "Laptop", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 10, CreatedBy: &createdBy},
+		{Code: "P002", Name: "Keyboard", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 15, CreatedBy: &createdBy},
+		{Code: "P003", Name: "Mouse", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 20, CreatedBy: &createdBy},
+		{Code: "P004", Name: "Monitor", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 5, CreatedBy: &createdBy},
+		{Code: "P005", Name: "Printer", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 8, CreatedBy: &createdBy},
 	}
 
 	tx := db.MustBegin()
+
 	for _, p := range products {
-		_, err := tx.Exec(`INSERT INTO products (code, name, category_id, supplier_id, warehouse_id, stock, created_by) 
+		_, err := tx.Exec(`
+            INSERT INTO products (code, name, category_id, supplier_id, warehouse_id, stock, created_by) 
             VALUES ($1,$2,$3,$4,$5,$6,$7)
             ON CONFLICT (code) DO NOTHING`,
-			p.Code, p.Name, p.CategoryID, p.SupplierID, p.WarehouseID, p.Stock, p.CreatedBy)
+			p.Code, p.Name, p.CategoryID, p.SupplierID, p.WarehouseID, p.Stock, p.CreatedBy,
+		)
 		if err != nil {
 			tx.Rollback()
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -588,26 +593,26 @@ func GetProducts(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
-		SELECT 
-    p.id,
-    p.code,
-    p.name,
-    p.category_id,
-    p.supplier_id,
-    p.warehouse_id,
-    p.stock,
-    p.price,
-    p.hold,
-    p.item_code,
-    p.image_url,
-    p.created_by,
-    v.id AS vehicle_id,
-    v.name AS vehicle_name
-FROM products p
-LEFT JOIN product_vehicles pv ON pv.product_id = p.id
-LEFT JOIN vehicles v ON v.id = pv.vehicle_id
-ORDER BY p.id
-	`)
+        SELECT 
+            p.id,
+            p.code,
+            p.name,
+            p.category_id,
+            p.supplier_id,
+            p.warehouse_id,
+            p.stock,
+            p.price,
+            p.hold,
+            p.item_code,
+            p.image_url,
+            p.created_by,
+            v.id AS vehicle_id,
+            v.name AS vehicle_name
+        FROM products p
+        LEFT JOIN product_vehicles pv ON pv.product_id = p.id
+        LEFT JOIN vehicles v ON v.id = pv.vehicle_id
+        ORDER BY p.id
+    `)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -617,52 +622,87 @@ ORDER BY p.id
 	productMap := make(map[int]*models.Product)
 
 	for rows.Next() {
+		// ✅ Use local variables (avoid overwriting productMap pointer data)
 		var (
-			p           models.Product
+			id          int
+			code        string
+			name        string
+			categoryID  int
+			supplierID  int
+			warehouseID int
+			stock       int
+			price       float64
+			hold        string
+			itemCode    string
+			createdBy   sql.NullInt64
+			imageURL    sql.NullString
 			vehicleID   sql.NullInt64
 			vehicleName sql.NullString
-			imageURL    sql.NullString
 		)
 
 		err := rows.Scan(
-			&p.ID,
-			&p.Code,
-			&p.Name,
-			&p.CategoryID,
-			&p.SupplierID,
-			&p.WarehouseID,
-			&p.Stock,
-			&p.Price,
-			&p.Hold,
-			&p.ItemCode,
+			&id,
+			&code,
+			&name,
+			&categoryID,
+			&supplierID,
+			&warehouseID,
+			&stock,
+			&price,
+			&hold,
+			&itemCode,
 			&imageURL,
-			&p.CreatedBy,
+			&createdBy,
 			&vehicleID,
 			&vehicleName,
 		)
-
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
-		if imageURL.Valid {
-			p.ImageURL = imageURL.String
+		// ✅ Check if product already exists in map
+		p, exists := productMap[id]
+		if !exists {
+			// First time seeing this product → create the struct
+			p = &models.Product{
+				ID:          id,
+				Code:        code,
+				Name:        name,
+				CategoryID:  categoryID,
+				SupplierID:  supplierID,
+				WarehouseID: warehouseID,
+				Stock:       stock,
+				Price:       price,
+				Hold:        hold,
+				ItemCode:    itemCode,
+				Vehicles:    []models.Vehicle{},
+			}
+
+			// ✅ Handle nullable image
+			if imageURL.Valid {
+				p.ImageURL = &imageURL.String
+			}
+
+			// ✅ Handle nullable created_by
+			if createdBy.Valid {
+				v := int(createdBy.Int64)
+				p.CreatedBy = &v
+			}
+
+			productMap[id] = p
 		}
 
-		if _, exists := productMap[p.ID]; !exists {
-			p.Vehicles = []models.Vehicle{}
-			productMap[p.ID] = &p
-		}
-
+		// ✅ Add vehicle if exists
 		if vehicleID.Valid {
-			productMap[p.ID].Vehicles = append(productMap[p.ID].Vehicles, models.Vehicle{
+			p.Vehicles = append(p.Vehicles, models.Vehicle{
 				ID:   int(vehicleID.Int64),
 				Name: vehicleName.String,
 			})
 		}
 	}
 
+	// ✅ Convert map → slice
 	var products []models.Product
 	for _, p := range productMap {
 		products = append(products, *p)
@@ -683,6 +723,84 @@ func nullFloat(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+func GetVehicles(c *gin.Context) {
+	db := c.MustGet("db").(*sqlx.DB)
+
+	var vehicles []models.Vehicle
+
+	err := db.Select(&vehicles, `
+        SELECT id, name 
+        FROM vehicles 
+        ORDER BY name
+    `)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"vehicles": vehicles})
+}
+
+func GetVehicle(c *gin.Context) {
+	db := c.MustGet("db").(*sqlx.DB)
+	id := c.Param("id")
+
+	var vehicle models.Vehicle
+
+	err := db.Get(&vehicle, `
+        SELECT id, name 
+        FROM vehicles 
+        WHERE id = $1
+    `, id)
+
+	if err != nil {
+		c.JSON(404, gin.H{"error": "Vehicle not found"})
+		return
+	}
+
+	c.JSON(200, gin.H{"vehicle": vehicle})
+}
+
+func CreateVehicle(c *gin.Context) {
+	db := c.MustGet("db").(*sqlx.DB)
+
+	var input struct {
+		Name string `json:"name"`
+	}
+
+	// Parse JSON body
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid JSON"})
+		return
+	}
+
+	if input.Name == "" {
+		c.JSON(400, gin.H{"error": "Name is required"})
+		return
+	}
+
+	// Insert vehicle
+	var id int
+	err := db.QueryRow(`
+        INSERT INTO vehicles (name)
+        VALUES ($1)
+        RETURNING id
+    `, input.Name).Scan(&id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(201, gin.H{
+		"message": "Vehicle created",
+		"vehicle": gin.H{
+			"id":   id,
+			"name": input.Name,
+		},
+	})
 }
 
 func CreateProduct(c *gin.Context) {
@@ -1138,6 +1256,8 @@ func CreateCustomers(c *gin.Context) {
 func CreateSale(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
 
+	var err error // ✅ named error for rollback
+
 	// ✅ Get authenticated user
 	userID := c.GetInt("user_id")
 	if userID == 0 {
@@ -1152,7 +1272,7 @@ func CreateSale(c *gin.Context) {
 		Price     float64 `json:"price"`
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
+	if bindErr := c.ShouldBindJSON(&input); bindErr != nil {
 		c.JSON(400, gin.H{"error": "Invalid input"})
 		return
 	}
@@ -1170,21 +1290,21 @@ func CreateSale(c *gin.Context) {
 		return
 	}
 
-	// Ensure rollback on failure
+	// ✅ rollback only on SQL errors
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
 	// ✅ Lock product row
 	var stock int
 	err = tx.QueryRow(`
-		SELECT stock 
-		FROM products 
-		WHERE id = $1 
-		FOR UPDATE
-	`, input.ProductID).Scan(&stock)
+        SELECT stock 
+        FROM products 
+        WHERE id = $1 
+        FOR UPDATE
+    `, input.ProductID).Scan(&stock)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1203,10 +1323,10 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Deduct stock
 	_, err = tx.Exec(`
-		UPDATE products 
-		SET stock = stock - $1 
-		WHERE id = $2
-	`, input.Quantity, input.ProductID)
+        UPDATE products 
+        SET stock = stock - $1 
+        WHERE id = $2
+    `, input.Quantity, input.ProductID)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -1221,10 +1341,10 @@ func CreateSale(c *gin.Context) {
 	var saleDate time.Time
 
 	err = tx.QueryRow(`
-		INSERT INTO sales (product_id, user_id, quantity, price, total)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, sale_date
-	`, input.ProductID, userID, input.Quantity, input.Price, total).Scan(&saleID, &saleDate)
+        INSERT INTO sales (product_id, user_id, quantity, price, total)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, sale_date
+    `, input.ProductID, userID, input.Quantity, input.Price, total).Scan(&saleID, &saleDate)
 
 	if err != nil {
 		c.JSON(500, gin.H{
@@ -1235,7 +1355,8 @@ func CreateSale(c *gin.Context) {
 	}
 
 	// ✅ Commit transaction
-	if err = tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}

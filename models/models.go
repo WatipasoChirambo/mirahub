@@ -53,8 +53,9 @@ type Product struct {
 	WarehouseID int     `db:"warehouse_id" json:"warehouse_id"`
 	Stock       int     `db:"stock" json:"stock"`
 	Price       float64 `db:"price" json:"price"`
-	CreatedBy   int     `db:"created_by" json:"created_by"`
-	ImageURL    string  `db:"image_url" json:"image_url"`
+
+	CreatedBy *int    `db:"created_by" json:"created_by"`
+	ImageURL  *string `db:"image_url" json:"image_url"`
 
 	// Many-to-many
 	Vehicles []Vehicle `json:"vehicles"`

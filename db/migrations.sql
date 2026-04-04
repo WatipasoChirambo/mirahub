@@ -52,7 +52,7 @@ CREATE TABLE warehouses (
 -- Vehicles (normalized)
 CREATE TABLE vehicles (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL
+    name VARCHAR(255) NOT NULL
 );
 
 -- Products
