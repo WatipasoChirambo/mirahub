@@ -82,7 +82,7 @@ func QuoteHandler(c *gin.Context) {
 
 	// 4. Create the Request
 	params := &resend.SendEmailRequest{
-		From:    "contact@mirahubautoparts.com", // Replace with your verified domain in production
+		From:    "quote@mirahubautoparts.com", // Replace with your verified domain in production
 		To:      []string{emailUser},
 		Cc:      []string{"elizabeth.chabaluka@gmail.com"},
 		ReplyTo: form.Email,
