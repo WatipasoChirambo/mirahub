@@ -63,13 +63,14 @@ type Product struct {
 
 // Sales
 type Sale struct {
-	ID        int       `db:"id" json:"id"`
-	ProductID int       `db:"product_id" json:"product_id"`
-	UserID    int       `db:"user_id" json:"user_id"` // who made the sale
-	Quantity  int       `db:"quantity" json:"quantity"`
-	Price     float64   `db:"price" json:"price"` // price at the time of sale
-	SaleDate  time.Time `db:"sale_date" json:"sale_date"`
-	Total     float64   `db:"total" json:"total"`
+	ID         int       `db:"id" json:"id"`
+	ProductID  int       `db:"product_id" json:"product_id"`
+	UserID     int       `db:"user_id" json:"user_id"` // who made the sale
+	CustomerID int       `db:"customer_id" json:"customer_id"`
+	Quantity   int       `db:"quantity" json:"quantity"`
+	Price      float64   `db:"price" json:"price"` // price at the time of sale
+	SaleDate   time.Time `db:"sale_date" json:"sale_date"`
+	Total      float64   `db:"total" json:"total"`
 }
 
 type SaleResponse struct {

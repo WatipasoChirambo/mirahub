@@ -113,6 +113,7 @@ CREATE TABLE sales (
     id SERIAL PRIMARY KEY,
     product_id INT REFERENCES products(id) ON DELETE CASCADE,
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
+    customer_id INT REFERENCES customers(id) ON DELETE SET NULL,
     quantity INT NOT NULL,
     price NUMERIC(10,2) NOT NULL,
     sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

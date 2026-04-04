@@ -1265,11 +1265,11 @@ func CreateSale(c *gin.Context) {
 		return
 	}
 
-	// ✅ Input struct
+	// ✅ Input struct (includes customer_id)
 	var input struct {
-		ProductID int     `json:"product_id"`
-		Quantity  int     `json:"quantity"`
-		Price     float64 `json:"price"`
+		ProductID  int `json:"product_id"`
+		CustomerID int `json:"customer_id"`
+		Quantity   int `json:"quantity"`
 	}
 
 	if bindErr := c.ShouldBindJSON(&input); bindErr != nil {
@@ -1278,8 +1278,13 @@ func CreateSale(c *gin.Context) {
 	}
 
 	// ✅ Basic validation
-	if input.ProductID <= 0 || input.Quantity <= 0 || input.Price <= 0 {
-		c.JSON(400, gin.H{"error": "Invalid product_id, quantity, or price"})
+	if input.ProductID <= 0 || input.Quantity <= 0 {
+		c.JSON(400, gin.H{"error": "Invalid product_id or quantity"})
+		return
+	}
+
+	if input.CustomerID <= 0 {
+		c.JSON(400, gin.H{"error": "Invalid customer_id"})
 		return
 	}
 
@@ -1290,21 +1295,22 @@ func CreateSale(c *gin.Context) {
 		return
 	}
 
-	// ✅ rollback only on SQL errors
 	defer func() {
 		if err != nil {
 			_ = tx.Rollback()
 		}
 	}()
 
-	// ✅ Lock product row
+	// ✅ Fetch product price + lock row
 	var stock int
+	var productPrice float64
+
 	err = tx.QueryRow(`
-        SELECT stock 
+        SELECT stock, price
         FROM products 
         WHERE id = $1 
         FOR UPDATE
-    `, input.ProductID).Scan(&stock)
+    `, input.ProductID).Scan(&stock, &productPrice)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1327,24 +1333,24 @@ func CreateSale(c *gin.Context) {
         SET stock = stock - $1 
         WHERE id = $2
     `, input.Quantity, input.ProductID)
-
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	// ✅ Calculate total
-	total := input.Price * float64(input.Quantity)
+	// ✅ Calculate total FROM DB PRICE (correct)
+	total := productPrice * float64(input.Quantity)
 
 	// ✅ Insert sale
 	var saleID int
 	var saleDate time.Time
 
 	err = tx.QueryRow(`
-        INSERT INTO sales (product_id, user_id, quantity, price, total)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO sales (product_id, customer_id, user_id, quantity, price, total)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, sale_date
-    `, input.ProductID, userID, input.Quantity, input.Price, total).Scan(&saleID, &saleDate)
+    `, input.ProductID, input.CustomerID, userID, input.Quantity, productPrice, total).
+		Scan(&saleID, &saleDate)
 
 	if err != nil {
 		c.JSON(500, gin.H{
@@ -1354,7 +1360,7 @@ func CreateSale(c *gin.Context) {
 		return
 	}
 
-	// ✅ Commit transaction
+	// ✅ Commit
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -1363,13 +1369,14 @@ func CreateSale(c *gin.Context) {
 
 	// ✅ Response
 	c.JSON(201, gin.H{
-		"id":         saleID,
-		"product_id": input.ProductID,
-		"user_id":    userID,
-		"quantity":   input.Quantity,
-		"price":      input.Price,
-		"sale_date":  saleDate,
-		"total":      total,
+		"id":          saleID,
+		"product_id":  input.ProductID,
+		"customer_id": input.CustomerID,
+		"user_id":     userID,
+		"quantity":    input.Quantity,
+		"price":       productPrice, // ✅ REAL product price
+		"total":       total,        // ✅ REAL total
+		"sale_date":   saleDate,
 	})
 }
 
@@ -1693,6 +1700,7 @@ func GetSales(c *gin.Context) {
 			s.user_id,
 			s.quantity,
 			s.price,
+			s.total,  
 			s.sale_date,
 			p.name AS product_name,
 			u.id AS created_by_id,
@@ -1723,6 +1731,7 @@ func GetSales(c *gin.Context) {
 			&s.UserID,
 			&s.Quantity,
 			&s.Price,
+			&s.Total,
 			&s.SaleDate,
 			&s.ProductName,
 			&s.CreatedByID,
