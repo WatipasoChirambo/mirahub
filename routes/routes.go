@@ -16,6 +16,9 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		public.POST("/auth/login", handlers.Login)
 		public.POST("/auth/logout", handlers.Logout)
 
+		public.POST("/contact", handlers.ContactHandler)
+		public.POST("/quote", handlers.QuoteHandler)
+
 		// Sales
 		// public.POST("/sales", handlers.CreateSale)
 		// public.GET("/sales", handlers.GetSales)

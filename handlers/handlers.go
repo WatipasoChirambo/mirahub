@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/gomail.v2"
 )
 
 // -------------------- Auth --------------------
@@ -31,6 +32,123 @@ type RegisterRequest struct {
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
 	Password string `json:"password"`
+}
+
+type ContactForm struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Subject string `json:"subject"`
+	Message string `json:"message"`
+}
+
+type QuoteForm struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Phone   string `json:"phone"`
+	Company string `json:"company"`
+	Parts   string `json:"parts"`
+	Notes   string `json:"notes"`
+}
+
+func QuoteHandler(c *gin.Context) {
+	var form QuoteForm
+
+	if err := c.ShouldBindJSON(&form); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	emailUser := os.Getenv("EMAIL_USER")
+	emailPass := os.Getenv("EMAIL_PASS")
+
+	if emailUser == "" || emailPass == "" {
+		c.JSON(500, gin.H{"error": "Email config not set"})
+		return
+	}
+
+	m := gomail.NewMessage()
+
+	m.SetHeader("From", emailUser)
+	m.SetHeader("To", emailUser)
+	m.SetHeader("Reply-To", form.Email)
+	m.SetHeader("Subject", "New Quote Request from "+form.Name)
+
+	m.SetBody("text/html", `
+		<h2>New Quote Request</h2>
+		<p><strong>Name:</strong> `+form.Name+`</p>
+		<p><strong>Email:</strong> `+form.Email+`</p>
+		<p><strong>Phone:</strong> `+form.Phone+`</p>
+		<p><strong>Company:</strong> `+form.Company+`</p>
+		<p><strong>Parts:</strong><br/>`+form.Parts+`</p>
+		<p><strong>Notes:</strong><br/>`+form.Notes+`</p>
+	`)
+
+	d := gomail.NewDialer(
+		"smtp.gmail.com",
+		587,
+		emailUser,
+		emailPass,
+	)
+
+	if err := d.DialAndSend(m); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "Quote request sent"})
+}
+
+func ContactHandler(c *gin.Context) {
+	var form ContactForm
+
+	// Parse JSON
+	if err := c.ShouldBindJSON(&form); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	emailUser := os.Getenv("EMAIL_USER")
+	emailPass := os.Getenv("EMAIL_PASS")
+
+	// Basic validation
+	if emailUser == "" || emailPass == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email config not set"})
+		return
+	}
+
+	m := gomail.NewMessage()
+
+	// Proper headers (important for Gmail)
+	m.SetHeader("From", emailUser)
+	m.SetHeader("To", emailUser)
+	m.SetHeader("Reply-To", form.Email) // 👈 allows replying to user
+	m.SetHeader("Subject", form.Subject)
+
+	m.SetBody("text/plain",
+		"Name: "+form.Name+"\n"+
+			"Email: "+form.Email+"\n\n"+
+			"Message:\n"+form.Message,
+	)
+
+	d := gomail.NewDialer(
+		"smtp.gmail.com",
+		587,
+		emailUser,
+		emailPass,
+	)
+
+	// Send email
+	if err := d.DialAndSend(m); err != nil {
+		// 👇 IMPORTANT: return real error for debugging
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Email sent successfully",
+	})
 }
 
 // Register a new user
@@ -265,45 +383,6 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
             (2, 'Secondary Warehouse', 'Lilongwe')
         ON CONFLICT (id) DO NOTHING
     `)
-	if err != nil {
-		tx.Rollback()
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	// ✅ Seed Products
-	_, err = tx.Exec(`
-    INSERT INTO products
-        (code, item_code, hold, name, category_id, supplier_id, warehouse_id, vehicle, stock, price, created_by)
-    VALUES
-        ('Z80',         'OF23',  'A1-1B',      'Oil Filter', 1, 1, 1, NULL,             0, 0.00, 1),
-        ('Z131',        'OF7',   'A1-4C',      'Oil Filter', 1, 1, 1, 'Toyota Old Hi',  0, 0.00, 1),
-        ('Z347',        'OF18',  'A1-5B',      'Oil Filter', 1, 1, 1, NULL,             0, 0.00, 1),
-        ('Z95',         'OF10',  'A1-A+',      'Oil Filter', 1, 1, 1, 'Ford Ranger 2',  0, 0.00, 1),
-
-        ('7801-21040',  'AF11',  'A9-3AB',     'Air Filter', 1, 1, 1, 'Toyota Prius',   0, 0.00, 1),
-        ('16546-41B00', 'AF2',   'A9-1C',      'Air Filter', 1, 1, 1, 'Nissan March',   0, 0.00, 1),
-        ('17801-11130', 'AF9',   'A9-4AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
-        ('17801-38050', 'AF25',  'A9-2AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
-        ('17801-33040', 'AF22',  'A5-1B',      'Air Filter', 1, 1, 1, 'Toyota Probox',  0, 0.00, 1),
-        ('17801-30040', 'AF17',  'A9-3AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
-        ('17801-28030', 'AF16',  'A5-6B',      'Air Filter', 1, 1, 1, 'Toyota Camry',   0, 0.00, 1),
-        ('17801-31090', 'AF20',  'A9-1AB',     'Air Filter', 1, 1, 1, 'Toyota FJ Cru',  0, 0.00, 1),
-        ('17801-31120', 'AF21',  '',           'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
-        ('17801-50040', 'AF27',  'A9-4AB',     'Air Filter', 1, 1, 1, 'Toyota Land C',  0, 0.00, 1),
-        ('17801-38011', 'AF24',  'A9-2C',      'Air Filter', 1, 1, 1, 'Toyota Camry',   0, 0.00, 1),
-        ('17801-30060', 'AF18',  'A6-3AB',     'Air Filter', 1, 1, 1, 'Toyota Hiace',   0, 0.00, 1),
-        ('17801-37020', 'AF23',  'A9-2AB',     'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
-        ('17801-30070', 'AF19',  'A9-1AB',     'Air Filter', 1, 1, 1, 'Toyota Hiace',   0, 0.00, 1),
-        ('17801-77050', 'AF34',  'A5-5B',      'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
-        ('17801-97402', 'AF37',  'A5-5C',      'Air Filter', 1, 1, 1, 'Toyota Passo',   0, 0.00, 1),
-        ('17801-21060', 'AF13',  '',           'Air Filter', 1, 1, 1, 'Toyota Passo 1', 0, 0.00, 1),
-        ('80292-T5R-E01','AF46', 'A5-1B',      'Air Filter', 1, 1, 1, NULL,             0, 0.00, 1),
-        ('17801-B1010', 'AF38',  'A6-6AB',     'Air Filter', 1, 1, 1, 'Daihatsu Terio', 0, 0.00, 1),
-        ('17801-28010', 'AF15',  'A6-5AB',     'Air Filter', 1, 1, 1, 'Toyota RAV 4',   0, 0.00, 1),
-        ('17801-54110', 'AF28',  'A6-4AB',     'Air Filter', 1, 1, 1, 'Toyota Hiace/1', 0, 0.00, 1)
-    ON CONFLICT (code) DO NOTHING;
-`)
 	if err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -785,12 +864,13 @@ func DeleteCustomer(c *gin.Context) {
 }
 
 func CreateCustomer(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	var input struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		Phone string `json:"phone"`
+		Name     string  `json:"name"`
+		Email    *string `json:"email"`
+		Phone    *string `json:"phone"`
+		Whatsapp *string `json:"whatsapp"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -798,15 +878,20 @@ func CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	// Authenticated user
 	createdBy := c.GetInt("user_id")
 
 	var id int
 	err := db.QueryRow(`
-        INSERT INTO customers (name, email, phone, created_by)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id
-    `, input.Name, input.Email, input.Phone, createdBy).Scan(&id)
+		INSERT INTO customers (name, email, phone, whatsapp, created_by)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id
+	`,
+		input.Name,
+		input.Email,
+		input.Phone,
+		input.Whatsapp,
+		createdBy,
+	).Scan(&id)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create customer: " + err.Error()})
@@ -820,7 +905,7 @@ func CreateCustomer(c *gin.Context) {
 }
 
 func GetCustomers(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
         SELECT 
@@ -880,7 +965,7 @@ func GetCustomers(c *gin.Context) {
 }
 
 func CreateOrder(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	userID := c.GetInt("user_id")
 	if userID == 0 {
@@ -975,7 +1060,7 @@ func CreateOrder(c *gin.Context) {
 }
 
 func GetOrders(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
 		SELECT id, customer_id, user_id, created_at
@@ -1010,7 +1095,7 @@ func GetOrders(c *gin.Context) {
 }
 
 func CreateCustomers(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	var input struct {
 		Name  string `json:"name"`
@@ -1045,7 +1130,7 @@ func CreateCustomers(c *gin.Context) {
 }
 
 func CreateSale(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	// ✅ Get authenticated user
 	userID := c.GetInt("user_id")
@@ -1162,7 +1247,7 @@ func CreateSale(c *gin.Context) {
 }
 
 func CreateInvoice(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	userID := c.GetInt("user_id")
 
 	var m models.Invoice
@@ -1175,7 +1260,7 @@ func CreateInvoice(c *gin.Context) {
 }
 
 func CreateQuotation(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	userID := c.GetInt("user_id")
 
 	var m models.Quotation

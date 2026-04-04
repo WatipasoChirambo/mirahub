@@ -30,7 +30,7 @@ CREATE TABLE suppliers (
 -- Users
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
+    username VARCHAR(50) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20) UNIQUE,
     password_hash TEXT NOT NULL,
@@ -78,14 +78,17 @@ CREATE TABLE product_vehicles (
     PRIMARY KEY (product_id, vehicle_id)
 );
 
--- Customers
 CREATE TABLE customers (
   id SERIAL PRIMARY KEY,
-  name TEXT,
-  email TEXT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE,
   phone TEXT,
+  whatsapp TEXT,
+  preferences JSONB DEFAULT '{}',
+  segment VARCHAR(50) DEFAULT 'new',
   created_by INT REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Orders
@@ -142,6 +145,39 @@ CREATE TABLE receipts (
     receipt_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     amount NUMERIC(10,2)
 );
+
+-- Seed Categories
+INSERT INTO categories (id, name) VALUES
+(1, 'Electronics'),
+(2, 'Accessories'),
+(3, 'Automotive')
+ON CONFLICT DO NOTHING;
+
+-- Seed Suppliers
+INSERT INTO suppliers (id, name, contact_info) VALUES
+(1, 'MegaTech', '0123456789'),
+(2, 'AutoSuppliers Ltd', '013339991')
+ON CONFLICT DO NOTHING;
+
+-- Seed Warehouses
+INSERT INTO warehouses (id, name, location) VALUES
+(1, 'Main Warehouse', 'Blantyre'),
+(2, 'Secondary Warehouse', 'Lilongwe')
+ON CONFLICT DO NOTHING;
+
+-- Seed Vehicles (IMPORTANT for your vehicle_ids)
+INSERT INTO vehicles (id, name) VALUES
+(1, 'Toyota Hilux'),
+(2, 'Ford Ranger'),
+(3, 'Nissan Navara')
+ON CONFLICT DO NOTHING;
+
+-- Seed User (password already hashed)
+INSERT INTO users (id, username, email, phone, password_hash, role) VALUES
+(1, 'admin', 'admin@mirahub.com', '0990000000',
+'$2a$12$uMl7jYQZ.A4dHqK5bMEwEu6k3Gak8z0N5L8lYEBeo4Qg.UL1rJ9fy',
+'admin')
+ON CONFLICT DO NOTHING;
 
 -- Indexes
 CREATE INDEX idx_sales_product_id ON sales(product_id);

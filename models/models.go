@@ -113,14 +113,17 @@ type Receipt struct {
 	Amount      float64   `db:"amount" json:"amount"`
 }
 
-// Customers
 type Customer struct {
-	ID        int       `db:"id" json:"id"`
-	Name      string    `db:"name" json:"name"`
-	Email     string    `db:"email" json:"email"`
-	Phone     string    `db:"phone" json:"phone"`
-	CreatedBy int       `db:"created_by" json:"created_by"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	ID          int                    `db:"id" json:"id"`
+	Name        string                 `db:"name" json:"name"`
+	Email       *string                `db:"email" json:"email"`
+	Phone       *string                `db:"phone" json:"phone"`
+	Whatsapp    *string                `db:"whatsapp" json:"whatsapp"`
+	Preferences map[string]interface{} `db:"preferences" json:"preferences"`
+	Segment     string                 `db:"segment" json:"segment"`
+	CreatedBy   *int                   `db:"created_by" json:"created_by"`
+	CreatedAt   time.Time              `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time              `db:"updated_at" json:"updated_at"`
 }
 
 type Order struct {

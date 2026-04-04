@@ -20,6 +20,8 @@ services:
     environment:
       DATABASE_URL: postgres://mirahub:mirahub123@db:5432/mirahub?sslmode=disable
       JWT_SECRET: supersecretkey
+      EMAIL_USER: watipasochirambo5@gmail.com
+      EMAIL_PASS: sdhicazyhkcvcxcv
     depends_on:
       - db
     command: [ "./mirahub-app" ]
