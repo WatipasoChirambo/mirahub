@@ -768,7 +768,7 @@ func CreateProduct(c *gin.Context) {
 }
 
 func GetCustomerByID(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 
 	var cust models.Customer
@@ -800,7 +800,7 @@ func GetCustomerByID(c *gin.Context) {
 }
 
 func UpdateCustomer(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 
 	var input struct {
@@ -838,7 +838,7 @@ func UpdateCustomer(c *gin.Context) {
 }
 
 func DeleteCustomer(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 
 	res, err := db.Exec(`
@@ -1273,7 +1273,7 @@ func CreateQuotation(c *gin.Context) {
 }
 
 func CreateReceipt(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	userID := c.GetInt("user_id")
 
 	var m models.Receipt
@@ -1293,7 +1293,7 @@ type CreateSaleRequest struct {
 }
 
 func GetCategories(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	rows, _ := db.Query("SELECT id, name FROM categories")
 	defer rows.Close()
 
@@ -1307,7 +1307,7 @@ func GetCategories(c *gin.Context) {
 }
 
 func CreateCategory(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	var m models.Category
 	c.ShouldBindJSON(&m)
 	db.Exec("INSERT INTO categories(name) VALUES($1)", m.Name)
@@ -1315,7 +1315,7 @@ func CreateCategory(c *gin.Context) {
 }
 
 func UpdateCategory(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 	var m models.Category
 	c.ShouldBindJSON(&m)
@@ -1324,14 +1324,14 @@ func UpdateCategory(c *gin.Context) {
 }
 
 func DeleteCategory(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 	db.Exec("DELETE FROM categories WHERE id=$1", id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
 func GetSuppliers(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	rows, _ := db.Query("SELECT id, name, contact_info FROM suppliers")
 	defer rows.Close()
 
@@ -1345,7 +1345,7 @@ func GetSuppliers(c *gin.Context) {
 }
 
 func CreateSupplier(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	var m models.Supplier
 	c.ShouldBindJSON(&m)
 	db.Exec("INSERT INTO suppliers(name, contact_info) VALUES($1,$2)", m.Name, m.ContactInfo)
@@ -1353,7 +1353,7 @@ func CreateSupplier(c *gin.Context) {
 }
 
 func UpdateSupplier(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 	var m models.Supplier
 	c.ShouldBindJSON(&m)
@@ -1362,14 +1362,14 @@ func UpdateSupplier(c *gin.Context) {
 }
 
 func DeleteSupplier(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 	db.Exec("DELETE FROM suppliers WHERE id=$1", id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
 func UpdateProduct(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 
 	var p models.Product
@@ -1382,14 +1382,14 @@ func UpdateProduct(c *gin.Context) {
 }
 
 func DeleteProduct(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	id := c.Param("id")
 	db.Exec("DELETE FROM products WHERE id=$1", id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
 func CreateWarehouse(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	userID := c.GetInt("user_id")
 	if userID == 0 {
@@ -1432,7 +1432,7 @@ func CreateWarehouse(c *gin.Context) {
 }
 
 func GetWarehouseStock(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
 		SELECT 
@@ -1472,7 +1472,7 @@ func GetWarehouseStock(c *gin.Context) {
 }
 
 func GetWarehouses(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
 		SELECT id, name, location, capacity, manager, status, created_at
@@ -1511,7 +1511,7 @@ func GetWarehouses(c *gin.Context) {
 }
 
 func UpdateWarehouse(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	id := c.Param("id")
 
@@ -1543,7 +1543,7 @@ func UpdateWarehouse(c *gin.Context) {
 }
 
 func DeleteWarehouse(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	id := c.Param("id")
 
@@ -1557,7 +1557,7 @@ func DeleteWarehouse(c *gin.Context) {
 }
 
 func GetSales(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 
 	rows, err := db.Query(`
 		SELECT 
@@ -1632,7 +1632,7 @@ func GetSales(c *gin.Context) {
 // -------------------- Invoices --------------------
 
 func GetInvoices(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	rows, err := db.Query("SELECT id, sale_id, user_id, invoice_date, total FROM invoices")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1656,7 +1656,7 @@ func GetInvoices(c *gin.Context) {
 // -------------------- Quotations --------------------
 
 func GetQuotations(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	rows, err := db.Query("SELECT id, product_id, user_id, quote_date, price FROM quotations")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1680,7 +1680,7 @@ func GetQuotations(c *gin.Context) {
 // -------------------- Receipts --------------------
 
 func GetReceipts(c *gin.Context) {
-	db := c.MustGet("db").(*sql.DB)
+	db := c.MustGet("db").(*sqlx.DB)
 	rows, err := db.Query("SELECT id, invoice_id, user_id, receipt_date, amount FROM receipts")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
