@@ -119,6 +119,7 @@ func ContactHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Resend API key not set"})
 		return
 	}
+
 	client := resend.NewClient(apiKey)
 
 	// 3. Prepare the Email
