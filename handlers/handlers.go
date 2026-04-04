@@ -122,8 +122,9 @@ func ContactHandler(c *gin.Context) {
 
 	// 3. Prepare the Email
 	params := &resend.SendEmailRequest{
-		From:    "onboarding@resend.dev", // Replace with your verified domain in production
+		From:    form.Email, // Replace with your verified domain in production
 		To:      []string{os.Getenv("EMAIL_USER")},
+		Cc:      []string{"watichirambo@gmail.com"},
 		Subject: form.Subject,
 		ReplyTo: form.Email,
 		Text: fmt.Sprintf(
@@ -587,16 +588,24 @@ func GetProducts(c *gin.Context) {
 
 	rows, err := db.Query(`
 		SELECT 
-			p.id, p.code, p.name,
-			p.category_id, p.supplier_id, p.warehouse_id,
-			p.stock, p.price, p.hold, p.item_code,
-			p.image_url,
-			p.created_by,
-			v.id, v.name
-		FROM products p
-		LEFT JOIN product_vehicles pv ON pv.product_id = p.id
-		LEFT JOIN vehicles v ON v.id = pv.vehicle_id
-		ORDER BY p.id
+    p.id,
+    p.code,
+    p.name,
+    p.category_id,
+    p.supplier_id,
+    p.warehouse_id,
+    p.stock,
+    p.price,
+    p.hold,
+    p.item_code,
+    p.image_url,
+    p.created_by,
+    v.id AS vehicle_id,
+    v.name AS vehicle_name
+FROM products p
+LEFT JOIN product_vehicles pv ON pv.product_id = p.id
+LEFT JOIN vehicles v ON v.id = pv.vehicle_id
+ORDER BY p.id
 	`)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
