@@ -29,7 +29,7 @@ func main() {
 		}
 
 		dsn = "postgres://" + user + ":" + password +
-			"@" + host + ":" + port + "/" + name + "?sslmode=require"
+			"@" + host + ":" + port + "/" + name + "?sslmode=disable"
 	}
 
 	// Connect DB
@@ -56,10 +56,15 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Inject DB (FIXED)
+	// Inject DB
 	r.Use(func(c *gin.Context) {
 		c.Set("db", db)
 		c.Next()
+	})
+
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	// Routes
