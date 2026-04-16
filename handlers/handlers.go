@@ -656,7 +656,20 @@ func GetProducts(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	productMap := make(map[int]*models.Product)
+	// Create a response struct to properly format the output
+	type ProductResponse struct {
+		ID       int      `json:"id"`
+		Code     string   `json:"code"`
+		Name     string   `json:"item"`
+		ItemCode string   `json:"item_code"`
+		Hold     string   `json:"hold"`
+		Stock    int      `json:"quantity"`
+		Price    float64  `json:"price"`
+		ImageURL string   `json:"image"`
+		Vehicles []string `json:"vehicles"`
+	}
+
+	productMap := make(map[int]*ProductResponse)
 
 	for rows.Next() {
 		var (
@@ -700,43 +713,38 @@ func GetProducts(c *gin.Context) {
 
 		p, exists := productMap[id]
 		if !exists {
-			// Convert itemCode to string
+			// Convert NULL values to empty strings
+			holdStr := ""
+			if hold.Valid {
+				holdStr = hold.String
+			}
+
 			itemCodeStr := ""
 			if itemCode.Valid {
 				itemCodeStr = itemCode.String
 			}
 
-			p = &models.Product{
-				ID:          id,
-				Code:        code,
-				Name:        name,
-				CategoryID:  categoryID,
-				SupplierID:  supplierID,
-				WarehouseID: warehouseID,
-				Stock:       stock,
-				Price:       price,
-				Hold:        hold,        // ✅ Use hold directly (sql.NullString)
-				ItemCode:    itemCodeStr, // string
-				Vehicles:    []models.Vehicle{},
+			imageURLStr := ""
+			if imageURL.Valid {
+				imageURLStr = imageURL.String
 			}
 
-			if imageURL.Valid && imageURL.String != "" {
-				p.ImageURL = &imageURL.String
+			p = &ProductResponse{
+				ID:       id,
+				Code:     code,
+				Name:     name,
+				ItemCode: itemCodeStr,
+				Hold:     holdStr,
+				Stock:    stock,
+				Price:    price,
+				ImageURL: imageURLStr,
+				Vehicles: []string{},
 			}
-
-			if createdBy.Valid && createdBy.Int64 > 0 {
-				v := int(createdBy.Int64)
-				p.CreatedBy = &v
-			}
-
 			productMap[id] = p
 		}
 
-		if vehicleID.Valid && vehicleID.Int64 > 0 {
-			p.Vehicles = append(p.Vehicles, models.Vehicle{
-				ID:   int(vehicleID.Int64),
-				Name: vehicleName.String,
-			})
+		if vehicleID.Valid && vehicleID.Int64 > 0 && vehicleName.Valid {
+			p.Vehicles = append(p.Vehicles, vehicleName.String)
 		}
 	}
 
@@ -746,7 +754,7 @@ func GetProducts(c *gin.Context) {
 		return
 	}
 
-	products := make([]models.Product, 0, len(productMap))
+	products := make([]ProductResponse, 0, len(productMap))
 	for _, p := range productMap {
 		products = append(products, *p)
 	}
