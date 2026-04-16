@@ -289,7 +289,7 @@ WHERE p.code IN ('P003', 'P004', 'P005', 'P008', 'P009', 'P012', 'P013')
   AND v.name IN ('Toyota Hilux', 'Ford Ranger', 'Nissan Navara', 'Toyota Prius', 'Toyota Aqua', 'Toyota Hiace')
 ON CONFLICT DO NOTHING;
 
--- Update sequences after manual inserts
+-- Update sequences after manual inserts (MOVED TO THE END)
 SELECT setval('categories_id_seq', (SELECT MAX(id) FROM categories));
 SELECT setval('suppliers_id_seq', (SELECT MAX(id) FROM suppliers));
 SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
