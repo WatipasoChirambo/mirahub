@@ -1896,16 +1896,9 @@ func CreateReceipt(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
 
 	// Get user_id from context (set by AuthMiddleware)
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(401, gin.H{"error": "unauthorized - user not authenticated"})
-		return
-	}
-
-	// Convert to int (since AuthMiddleware stores it as int)
-	createdBy, ok := userIDValue.(int)
-	if !ok {
-		c.JSON(500, gin.H{"error": "invalid user ID type"})
+	userID := c.GetInt("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
 		return
 	}
 
@@ -1929,46 +1922,95 @@ func CreateReceipt(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(400, gin.H{"error": "Invalid input: " + err.Error()})
 		return
 	}
 
-	// Start transaction
-	tx, err := db.Beginx()
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	// Validate input
+	if req.CustomerID <= 0 {
+		c.JSON(400, gin.H{"error": "Invalid customer_id"})
 		return
 	}
-	defer tx.Rollback()
+
+	if len(req.Items) == 0 {
+		c.JSON(400, gin.H{"error": "At least one item is required"})
+		return
+	}
+
+	// Start transaction (using Begin() like in CreateSale, not Beginx)
+	tx, err := db.Begin()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+
+	// Use defer for rollback like CreateSale
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Check stock availability for all items first
+	for _, item := range req.Items {
+		var stock int
+		err = tx.QueryRow(`
+			SELECT stock
+			FROM products 
+			WHERE id = $1 
+			FOR UPDATE
+		`, item.ProductID).Scan(&stock)
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(404, gin.H{"error": "Product not found: " + string(rune(item.ProductID))})
+			} else {
+				c.JSON(500, gin.H{"error": err.Error()})
+			}
+			return
+		}
+
+		if item.Quantity > stock {
+			c.JSON(400, gin.H{
+				"error":           "Insufficient stock for product ID",
+				"product_id":      item.ProductID,
+				"available_stock": stock,
+				"requested":       item.Quantity,
+			})
+			return
+		}
+	}
 
 	// Insert receipt
 	var receiptID int
+	var receiptDate time.Time
+
 	err = tx.QueryRow(`
 		INSERT INTO receipts 
 		(receipt_number, date, customer_id, total_amount, discount, tax, final_amount, payment_method, notes, created_by, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		RETURNING id
+		RETURNING id, created_at
 	`,
 		req.ReceiptNumber,
 		req.Date,
-		nullIntForID(req.CustomerID),
+		req.CustomerID, // Use directly, no nullIntForID needed if customer_id is required
 		req.TotalAmount,
 		req.Discount,
 		req.Tax,
 		req.FinalAmount,
 		req.PaymentMethod,
 		req.Notes,
-		createdBy, // Use user_id from auth middleware, NOT from request
-	).Scan(&receiptID)
+		userID,
+	).Scan(&receiptID, &receiptDate)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create receipt: " + err.Error()})
 		return
 	}
 
-	// Insert receipt items
+	// Insert receipt items and update stock
 	for _, item := range req.Items {
-		_, err := tx.Exec(`
+		_, err = tx.Exec(`
 			INSERT INTO receipt_items 
 			(receipt_id, product_id, quantity, unit_price, total_price)
 			VALUES ($1, $2, $3, $4, $5)
@@ -1985,11 +2027,11 @@ func CreateReceipt(c *gin.Context) {
 			return
 		}
 
-		// Update product stock
+		// Update product stock (similar to CreateSale)
 		_, err = tx.Exec(`
 			UPDATE products 
 			SET stock = stock - $1 
-			WHERE id = $2 AND stock >= $1
+			WHERE id = $2
 		`,
 			item.Quantity,
 			item.ProductID,
@@ -2002,15 +2044,24 @@ func CreateReceipt(c *gin.Context) {
 	}
 
 	// Commit transaction
-	if err := tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to commit receipt: " + err.Error()})
 		return
 	}
 
 	c.JSON(201, gin.H{
-		"message":        "receipt created successfully",
-		"receipt_id":     receiptID,
+		"id":             receiptID,
 		"receipt_number": req.ReceiptNumber,
+		"date":           receiptDate,
+		"customer_id":    req.CustomerID,
+		"total_amount":   req.TotalAmount,
+		"discount":       req.Discount,
+		"tax":            req.Tax,
+		"final_amount":   req.FinalAmount,
+		"payment_method": req.PaymentMethod,
+		"created_by":     userID,
+		"items":          req.Items,
 	})
 }
 
