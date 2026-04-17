@@ -555,7 +555,29 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Return both token and user_id
+	// Set cookie for web clients
+	c.SetCookie(
+		"token",
+		tokenString,
+		86400, // 24 hours in seconds
+		"/",
+		"",
+		false, // httpOnly - set to false so JS can read it (or true for security)
+		true,  // secure - set to true in production with HTTPS
+	)
+
+	// Also set user_id cookie for convenience
+	c.SetCookie(
+		"user_id",
+		fmt.Sprintf("%d", user.ID),
+		86400,
+		"/",
+		"",
+		false,
+		true,
+	)
+
+	// Return both token and user_id for clients that don't use cookies
 	c.JSON(http.StatusOK, gin.H{
 		"token":   tokenString,
 		"user_id": user.ID,
@@ -582,21 +604,33 @@ func Logout(c *gin.Context) {
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenString string
+
+		// Try to get token from Authorization header first
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenString = parts[1]
+			} else {
+				tokenString = authHeader
+			}
+		}
+
+		// If not in header, try to get from cookie
+		if tokenString == "" {
+			cookie, err := c.Cookie("token")
+			if err == nil && cookie != "" {
+				tokenString = cookie
+			}
+		}
+
+		// If still no token, return unauthorized
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing authentication token"})
 			c.Abort()
 			return
 		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Authorization header format"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
