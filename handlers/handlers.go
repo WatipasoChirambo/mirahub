@@ -1896,10 +1896,10 @@ func CreateReceipt(c *gin.Context) {
 		return
 	}
 
-	// Use user_id from request
+	// Get user ID from request body first
 	userID := input.UserID
 
-	// If user_id not provided, try to get from context (fallback)
+	// If not in request body, try to get from context (for backward compatibility)
 	if userID == 0 {
 		if uid, exists := c.Get("user_id"); exists {
 			switch v := uid.(type) {
@@ -1907,15 +1907,13 @@ func CreateReceipt(c *gin.Context) {
 				userID = v
 			case float64:
 				userID = int(v)
-			case string:
-				// Convert string to int if needed
-				fmt.Sscanf(v, "%d", &userID)
 			}
 		}
 	}
 
+	// If still no user ID, return error
 	if userID == 0 {
-		c.JSON(401, gin.H{"error": "Unauthorized - user not found"})
+		c.JSON(401, gin.H{"error": "Unauthorized - user not found in request"})
 		return
 	}
 
