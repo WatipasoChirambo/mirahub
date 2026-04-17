@@ -1904,21 +1904,27 @@ func CreateReceipt(c *gin.Context) {
 
 	// Parse request body
 	var req struct {
-		ReceiptNumber string  `json:"receipt_number" binding:"required"`
-		Date          string  `json:"date" binding:"required"`
+		ReceiptNumber string  `json:"receipt_number"` // reference_no in DB
+		Date          string  `json:"date"`           // receipt_date in DB
 		CustomerID    int     `json:"customer_id"`
-		TotalAmount   float64 `json:"total_amount" binding:"required"`
+		Subtotal      float64 `json:"subtotal"`
+		TaxRate       float64 `json:"tax_rate"`
+		TaxAmount     float64 `json:"tax_amount"`
 		Discount      float64 `json:"discount"`
-		Tax           float64 `json:"tax"`
-		FinalAmount   float64 `json:"final_amount" binding:"required"`
-		PaymentMethod string  `json:"payment_method" binding:"required"`
+		Total         float64 `json:"total"`
+		PaymentMethod string  `json:"payment_method"`
 		Notes         string  `json:"notes"`
+		Status        string  `json:"status"`
+		InvoiceID     *int    `json:"invoice_id"` // optional invoice reference
 		Items         []struct {
-			ProductID  int     `json:"product_id" binding:"required"`
-			Quantity   int     `json:"quantity" binding:"required"`
-			UnitPrice  float64 `json:"unit_price" binding:"required"`
-			TotalPrice float64 `json:"total_price" binding:"required"`
-		} `json:"items" binding:"required,min=1"`
+			ProductID   int     `json:"product_id"`
+			ProductName string  `json:"product_name"`
+			ProductCode string  `json:"product_code"`
+			Quantity    int     `json:"quantity"`
+			Price       float64 `json:"price"`
+			TotalPrice  float64 `json:"total_price"`
+			Description string  `json:"description"`
+		} `json:"items"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1926,25 +1932,35 @@ func CreateReceipt(c *gin.Context) {
 		return
 	}
 
-	// Validate input
-	if req.CustomerID <= 0 {
-		c.JSON(400, gin.H{"error": "Invalid customer_id"})
-		return
-	}
-
+	// Validate required fields
 	if len(req.Items) == 0 {
 		c.JSON(400, gin.H{"error": "At least one item is required"})
 		return
 	}
 
-	// Start transaction (using Begin() like in CreateSale, not Beginx)
+	if req.CustomerID <= 0 {
+		c.JSON(400, gin.H{"error": "Valid customer_id is required"})
+		return
+	}
+
+	// Set default values if not provided
+	if req.Status == "" {
+		req.Status = "completed"
+	}
+	if req.PaymentMethod == "" {
+		req.PaymentMethod = "cash"
+	}
+	if req.Date == "" {
+		req.Date = time.Now().Format(time.RFC3339)
+	}
+
+	// Start transaction
 	tx, err := db.Begin()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to start transaction"})
 		return
 	}
 
-	// Use defer for rollback like CreateSale
 	defer func() {
 		if err != nil {
 			_ = tx.Rollback()
@@ -1963,7 +1979,7 @@ func CreateReceipt(c *gin.Context) {
 
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(404, gin.H{"error": "Product not found: " + string(rune(item.ProductID))})
+				c.JSON(404, gin.H{"error": fmt.Sprintf("Product not found: ID %d", item.ProductID)})
 			} else {
 				c.JSON(500, gin.H{"error": err.Error()})
 			}
@@ -1972,8 +1988,9 @@ func CreateReceipt(c *gin.Context) {
 
 		if item.Quantity > stock {
 			c.JSON(400, gin.H{
-				"error":           "Insufficient stock for product ID",
+				"error":           "Insufficient stock",
 				"product_id":      item.ProductID,
+				"product_name":    item.ProductName,
 				"available_stock": stock,
 				"requested":       item.Quantity,
 			})
@@ -1981,26 +1998,45 @@ func CreateReceipt(c *gin.Context) {
 		}
 	}
 
-	// Insert receipt
+	// Insert receipt - matching your exact schema
 	var receiptID int
 	var receiptDate time.Time
 
 	err = tx.QueryRow(`
-		INSERT INTO receipts 
-		(receipt_number, date, customer_id, total_amount, discount, tax, final_amount, payment_method, notes, created_by, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		RETURNING id, created_at
+		INSERT INTO receipts (
+			invoice_id,
+			user_id,
+			receipt_date,
+			amount,
+			payment_method,
+			reference_no,
+			notes,
+			customer_id,
+			subtotal,
+			tax_rate,
+			tax_amount,
+			discount,
+			total,
+			status,
+			created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+		RETURNING id, receipt_date
 	`,
-		req.ReceiptNumber,
-		req.Date,
-		req.CustomerID, // Use directly, no nullIntForID needed if customer_id is required
-		req.TotalAmount,
-		req.Discount,
-		req.Tax,
-		req.FinalAmount,
-		req.PaymentMethod,
-		req.Notes,
-		userID,
+		nullIntForIDPtr(req.InvoiceID), // invoice_id (can be NULL)
+		userID,                         // user_id
+		req.Date,                       // receipt_date
+		req.Total,                      // amount (using total as amount)
+		req.PaymentMethod,              // payment_method
+		req.ReceiptNumber,              // reference_no
+		req.Notes,                      // notes
+		req.CustomerID,                 // customer_id
+		req.Subtotal,                   // subtotal
+		req.TaxRate,                    // tax_rate
+		req.TaxAmount,                  // tax_amount
+		req.Discount,                   // discount
+		req.Total,                      // total
+		req.Status,                     // status
 	).Scan(&receiptID, &receiptDate)
 
 	if err != nil {
@@ -2010,16 +2046,44 @@ func CreateReceipt(c *gin.Context) {
 
 	// Insert receipt items and update stock
 	for _, item := range req.Items {
+		// Get product details if not provided
+		productName := item.ProductName
+		productCode := item.ProductCode
+
+		if productName == "" || productCode == "" {
+			var dbProduct struct {
+				Name string
+				Code string
+			}
+			err = tx.QueryRow(`
+				SELECT name, COALESCE(code, '') as code 
+				FROM products WHERE id = $1
+			`, item.ProductID).Scan(&dbProduct.Name, &dbProduct.Code)
+
+			if err == nil {
+				if productName == "" {
+					productName = dbProduct.Name
+				}
+				if productCode == "" {
+					productCode = dbProduct.Code
+				}
+			}
+		}
+
+		// Insert receipt item
 		_, err = tx.Exec(`
 			INSERT INTO receipt_items 
-			(receipt_id, product_id, quantity, unit_price, total_price)
-			VALUES ($1, $2, $3, $4, $5)
+			(receipt_id, product_id, product_name, product_code, quantity, price, total, description)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		`,
 			receiptID,
 			item.ProductID,
+			productName,
+			productCode,
 			item.Quantity,
-			item.UnitPrice,
+			item.Price,
 			item.TotalPrice,
+			item.Description,
 		)
 
 		if err != nil {
@@ -2027,11 +2091,11 @@ func CreateReceipt(c *gin.Context) {
 			return
 		}
 
-		// Update product stock (similar to CreateSale)
-		_, err = tx.Exec(`
+		// Update product stock
+		result, err := tx.Exec(`
 			UPDATE products 
 			SET stock = stock - $1 
-			WHERE id = $2
+			WHERE id = $2 AND stock >= $1
 		`,
 			item.Quantity,
 			item.ProductID,
@@ -2039,6 +2103,16 @@ func CreateReceipt(c *gin.Context) {
 
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to update product stock: " + err.Error()})
+			return
+		}
+
+		// Check if stock was actually updated
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			c.JSON(400, gin.H{
+				"error":      "Stock update failed - insufficient stock",
+				"product_id": item.ProductID,
+			})
 			return
 		}
 	}
@@ -2050,27 +2124,31 @@ func CreateReceipt(c *gin.Context) {
 		return
 	}
 
+	// Return success response
 	c.JSON(201, gin.H{
+		"message":        "Receipt created successfully",
 		"id":             receiptID,
 		"receipt_number": req.ReceiptNumber,
-		"date":           receiptDate,
+		"receipt_date":   receiptDate,
 		"customer_id":    req.CustomerID,
-		"total_amount":   req.TotalAmount,
+		"subtotal":       req.Subtotal,
+		"tax_rate":       req.TaxRate,
+		"tax_amount":     req.TaxAmount,
 		"discount":       req.Discount,
-		"tax":            req.Tax,
-		"final_amount":   req.FinalAmount,
+		"total":          req.Total,
 		"payment_method": req.PaymentMethod,
+		"status":         req.Status,
 		"created_by":     userID,
-		"items":          req.Items,
+		"items_count":    len(req.Items),
 	})
 }
 
-// Helper function for nullable customer_id
-func nullIntForID(i int) sql.NullInt64 {
-	if i == 0 {
-		return sql.NullInt64{Valid: false}
+// Helper function for nullable invoice_id
+func nullIntForIDPtr(i *int) interface{} {
+	if i == nil || *i == 0 {
+		return nil
 	}
-	return sql.NullInt64{Int64: int64(i), Valid: true}
+	return *i
 }
 
 // Helper function for null strings
