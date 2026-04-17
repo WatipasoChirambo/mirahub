@@ -1885,182 +1885,134 @@ func CreateQuotation(c *gin.Context) {
 	})
 }
 
-// Update CreateReceipt function
 func CreateReceipt(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
 
-	var input ReceiptWithItemsRequest
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid input: " + err.Error()})
+	// Get user_id from context (set by AuthMiddleware)
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(401, gin.H{"error": "unauthorized - user not authenticated"})
 		return
 	}
 
-	// Get user ID from request body first
-	userID := input.UserID
-
-	// If not in request body, try to get from context (for backward compatibility)
-	if userID == 0 {
-		if uid, exists := c.Get("user_id"); exists {
-			switch v := uid.(type) {
-			case int:
-				userID = v
-			case float64:
-				userID = int(v)
-			}
-		}
-	}
-
-	// If still no user ID, return error
-	if userID == 0 {
-		c.JSON(401, gin.H{"error": "Unauthorized - user not found in request"})
+	// Convert to int (since AuthMiddleware stores it as int)
+	createdBy, ok := userIDValue.(int)
+	if !ok {
+		c.JSON(500, gin.H{"error": "invalid user ID type"})
 		return
 	}
 
-	// Validate items
-	if len(input.Items) == 0 {
-		c.JSON(400, gin.H{"error": "At least one item is required"})
+	// Parse request body
+	var req struct {
+		ReceiptNumber string  `json:"receipt_number" binding:"required"`
+		Date          string  `json:"date" binding:"required"`
+		CustomerID    int     `json:"customer_id"`
+		TotalAmount   float64 `json:"total_amount" binding:"required"`
+		Discount      float64 `json:"discount"`
+		Tax           float64 `json:"tax"`
+		FinalAmount   float64 `json:"final_amount" binding:"required"`
+		PaymentMethod string  `json:"payment_method" binding:"required"`
+		Notes         string  `json:"notes"`
+		Items         []struct {
+			ProductID  int     `json:"product_id" binding:"required"`
+			Quantity   int     `json:"quantity" binding:"required"`
+			UnitPrice  float64 `json:"unit_price" binding:"required"`
+			TotalPrice float64 `json:"total_price" binding:"required"`
+		} `json:"items" binding:"required,min=1"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Start transaction
 	tx, err := db.Beginx()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to start transaction: " + err.Error()})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 	defer tx.Rollback()
 
-	// Create or get customer
-	var customerID *int
-	if input.CustomerName != "" && input.CustomerName != "Walk-in Customer" {
-		var existingID int
-		var queryErr error
-
-		if input.CustomerEmail != "" {
-			queryErr = tx.QueryRow(`
-				SELECT id FROM customers WHERE email = $1 LIMIT 1
-			`, input.CustomerEmail).Scan(&existingID)
-		} else if input.CustomerPhone != "" {
-			queryErr = tx.QueryRow(`
-				SELECT id FROM customers WHERE phone = $1 LIMIT 1
-			`, input.CustomerPhone).Scan(&existingID)
-		}
-
-		if queryErr == nil {
-			customerID = &existingID
-		} else {
-			// Create new customer
-			var newID int
-			err = tx.QueryRow(`
-				INSERT INTO customers (name, email, phone, created_by, created_at)
-				VALUES ($1, $2, $3, $4, NOW())
-				RETURNING id
-			`, input.CustomerName, nullString(input.CustomerEmail), nullString(input.CustomerPhone), userID).Scan(&newID)
-
-			if err != nil {
-				c.JSON(500, gin.H{"error": "Failed to create customer: " + err.Error()})
-				return
-			}
-			customerID = &newID
-		}
-	}
-
-	// Set default payment method
-	paymentMethod := input.PaymentMethod
-	if paymentMethod == "" {
-		paymentMethod = "cash"
-	}
-
-	// Generate receipt number if not provided
-	receiptNum := input.ReceiptNumber
-	if receiptNum == "" {
-		receiptNum = fmt.Sprintf("RCPT-%d", time.Now().Unix())
-	}
-
-	// Create receipt record
+	// Insert receipt
 	var receiptID int
-	var receiptDate time.Time
-
 	err = tx.QueryRow(`
-		INSERT INTO receipts (
-			user_id, amount, payment_method, reference_no, notes, 
-			receipt_date, customer_id, subtotal, tax_rate, tax_amount, 
-			discount, total, status
-		)
-		VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11, 'completed')
-		RETURNING id, receipt_date
-	`, userID, input.Total, paymentMethod, receiptNum, input.Notes,
-		customerID, input.Subtotal, input.TaxRate, input.TaxAmount,
-		input.Discount, input.Total).Scan(&receiptID, &receiptDate)
+		INSERT INTO receipts 
+		(receipt_number, date, customer_id, total_amount, discount, tax, final_amount, payment_method, notes, created_by, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+		RETURNING id
+	`,
+		req.ReceiptNumber,
+		req.Date,
+		nullIntForID(req.CustomerID),
+		req.TotalAmount,
+		req.Discount,
+		req.Tax,
+		req.FinalAmount,
+		req.PaymentMethod,
+		req.Notes,
+		createdBy, // Use user_id from auth middleware, NOT from request
+	).Scan(&receiptID)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create receipt: " + err.Error()})
 		return
 	}
 
-	// Create receipt items and update stock
-	for _, item := range input.Items {
-		// Check stock availability
-		var currentStock int
-		err = tx.QueryRow(`
-			SELECT stock FROM products WHERE id = $1 FOR UPDATE
-		`, item.ProductID).Scan(&currentStock)
+	// Insert receipt items
+	for _, item := range req.Items {
+		_, err := tx.Exec(`
+			INSERT INTO receipt_items 
+			(receipt_id, product_id, quantity, unit_price, total_price)
+			VALUES ($1, $2, $3, $4, $5)
+		`,
+			receiptID,
+			item.ProductID,
+			item.Quantity,
+			item.UnitPrice,
+			item.TotalPrice,
+		)
 
 		if err != nil {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("Product %d not found", item.ProductID)})
+			c.JSON(500, gin.H{"error": "Failed to create receipt items: " + err.Error()})
 			return
 		}
 
-		if item.Quantity > currentStock {
-			c.JSON(400, gin.H{
-				"error": fmt.Sprintf("Insufficient stock for product %s. Available: %d, Requested: %d",
-					item.Name, currentStock, item.Quantity),
-			})
-			return
-		}
-
-		// Insert receipt item
+		// Update product stock
 		_, err = tx.Exec(`
-			INSERT INTO receipt_items (
-				receipt_id, product_id, product_name, product_code, 
-				quantity, price, total, description
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, receiptID, item.ProductID, item.Name, item.Code,
-			item.Quantity, item.Price, float64(item.Quantity)*item.Price,
-			item.Description)
+			UPDATE products 
+			SET stock = stock - $1 
+			WHERE id = $2 AND stock >= $1
+		`,
+			item.Quantity,
+			item.ProductID,
+		)
 
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to save receipt item: " + err.Error()})
-			return
-		}
-
-		// Update stock
-		_, err = tx.Exec(`
-			UPDATE products SET stock = stock - $1 WHERE id = $2
-		`, item.Quantity, item.ProductID)
-
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to update stock: " + err.Error()})
+			c.JSON(500, gin.H{"error": "Failed to update product stock: " + err.Error()})
 			return
 		}
 	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": "Failed to commit transaction: " + err.Error()})
+		c.JSON(500, gin.H{"error": "Failed to commit receipt: " + err.Error()})
 		return
 	}
 
-	// Return success response
-	c.JSON(http.StatusCreated, gin.H{
-		"message":        "Receipt created successfully",
-		"id":             receiptID,
-		"receipt_date":   receiptDate,
-		"receipt_number": receiptNum,
-		"total":          input.Total,
+	c.JSON(201, gin.H{
+		"message":        "receipt created successfully",
+		"receipt_id":     receiptID,
+		"receipt_number": req.ReceiptNumber,
 	})
+}
+
+// Helper function for nullable customer_id
+func nullIntForID(i int) sql.NullInt64 {
+	if i == 0 {
+		return sql.NullInt64{Valid: false}
+	}
+	return sql.NullInt64{Int64: int64(i), Valid: true}
 }
 
 // Helper function for null strings
