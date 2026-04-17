@@ -519,8 +519,6 @@ func Login(c *gin.Context) {
 
 	db := c.MustGet("db").(*sqlx.DB)
 
-	log.Println("🔍 LOGIN HANDLER RUNNING WITH IDENTIFIER:", req.Identifier)
-
 	var user models.User
 	row := db.QueryRow(`
         SELECT id, username, password_hash, role
@@ -557,7 +555,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+	// Return both token and user_id
+	c.JSON(http.StatusOK, gin.H{
+		"token":   tokenString,
+		"user_id": user.ID,
+	})
 }
 
 func Logout(c *gin.Context) {
