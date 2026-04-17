@@ -1261,6 +1261,13 @@ func CreateProduct(c *gin.Context) {
 	itemCode := c.PostForm("item_code")
 	name := c.PostForm("name")
 
+	userID := c.GetInt("user_id")
+
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	categoryID := c.PostForm("category_id")
 	supplierID := c.PostForm("supplier_id")
 	warehouseID := c.PostForm("warehouse_id")
