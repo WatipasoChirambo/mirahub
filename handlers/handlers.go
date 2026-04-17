@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,19 +51,19 @@ type QuoteForm struct {
 	Notes   string `json:"notes"`
 }
 
-// ReceiptWithItemsRequest represents the request for creating a receipt with items
+// Update your ReceiptWithItemsRequest struct to include UserID
 type ReceiptWithItemsRequest struct {
 	CustomerName  string `json:"customer_name"`
 	CustomerEmail string `json:"customer_email"`
 	CustomerPhone string `json:"customer_phone"`
+	UserID        int    `json:"user_id"`
 	Items         []struct {
-		ProductID            int     `json:"product_id"`
-		Name                 string  `json:"name"`
-		Code                 string  `json:"code"`
-		Quantity             int     `json:"quantity"`
-		Price                float64 `json:"price"`
-		Description          string  `json:"description"`
-		VehicleCompatibility string  `json:"vehicle_compatibility"`
+		ProductID   int     `json:"product_id"`
+		Name        string  `json:"name"`
+		Code        string  `json:"code"`
+		Quantity    int     `json:"quantity"`
+		Price       float64 `json:"price"`
+		Description string  `json:"description"`
 	} `json:"items"`
 	Subtotal      float64 `json:"subtotal"`
 	TaxRate       float64 `json:"tax_rate"`
@@ -1886,49 +1885,37 @@ func CreateQuotation(c *gin.Context) {
 	})
 }
 
-// CreateReceipt - Main function for creating receipts with items
+// Update CreateReceipt function
 func CreateReceipt(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
-
-	// Get user ID from context - use the same pattern as your auth middleware
-	// Option 1: If user_id is stored as interface{}
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(401, gin.H{"error": "Unauthorized - user not found in context"})
-		return
-	}
-
-	// Convert to int properly
-	var userID int
-	switch v := userIDInterface.(type) {
-	case int:
-		userID = v
-	case int64:
-		userID = int(v)
-	case float64:
-		userID = int(v)
-	case string:
-		// If stored as string, convert it
-		id, err := strconv.Atoi(v)
-		if err != nil {
-			c.JSON(401, gin.H{"error": "Invalid user ID format"})
-			return
-		}
-		userID = id
-	default:
-		c.JSON(401, gin.H{"error": "User ID has invalid type"})
-		return
-	}
-
-	if userID == 0 {
-		c.JSON(401, gin.H{"error": "Unauthorized - invalid user ID"})
-		return
-	}
 
 	var input ReceiptWithItemsRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid input: " + err.Error()})
+		return
+	}
+
+	// Use user_id from request
+	userID := input.UserID
+
+	// If user_id not provided, try to get from context (fallback)
+	if userID == 0 {
+		if uid, exists := c.Get("user_id"); exists {
+			switch v := uid.(type) {
+			case int:
+				userID = v
+			case float64:
+				userID = int(v)
+			case string:
+				// Convert string to int if needed
+				fmt.Sscanf(v, "%d", &userID)
+			}
+		}
+	}
+
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "Unauthorized - user not found"})
 		return
 	}
 
