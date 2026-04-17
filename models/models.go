@@ -44,16 +44,15 @@ type Vehicle struct {
 	Name string `db:"name" json:"name"`
 }
 
-// Products
 type Product struct {
 	ID          int            `db:"id" json:"id"`
 	Code        string         `db:"code" json:"code"`
 	ItemCode    string         `db:"item_code" json:"item_code"`
 	Hold        sql.NullString `json:"hold"`
 	Name        string         `db:"name" json:"name"`
-	CategoryID  int            `db:"category_id" json:"category_id"`
-	SupplierID  int            `db:"supplier_id" json:"supplier_id"`
-	WarehouseID int            `db:"warehouse_id" json:"warehouse_id"`
+	CategoryID  sql.NullInt64  `db:"category_id" json:"category_id"`   // Changed to sql.NullInt64
+	SupplierID  sql.NullInt64  `db:"supplier_id" json:"supplier_id"`   // Changed to sql.NullInt64
+	WarehouseID sql.NullInt64  `db:"warehouse_id" json:"warehouse_id"` // Changed to sql.NullInt64
 	Stock       int            `db:"stock" json:"stock"`
 	Price       float64        `db:"price" json:"price"`
 

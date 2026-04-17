@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -418,32 +419,92 @@ func SeedAll(c *gin.Context, db *sqlx.DB) {
 
 func SeedProducts(c *gin.Context, db *sqlx.DB) {
 	createdBy := 1
-	products := []models.Product{
-		{Code: "P001", Name: "Laptop", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 10, CreatedBy: &createdBy},
-		{Code: "P002", Name: "Keyboard", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 15, CreatedBy: &createdBy},
-		{Code: "P003", Name: "Mouse", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 20, CreatedBy: &createdBy},
-		{Code: "P004", Name: "Monitor", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 5, CreatedBy: &createdBy},
-		{Code: "P005", Name: "Printer", CategoryID: 1, SupplierID: 1, WarehouseID: 1, Stock: 8, CreatedBy: &createdBy},
+
+	// Use sql.NullInt64 for nullable fields
+	products := []struct {
+		Code        string
+		Name        string
+		CategoryID  sql.NullInt64
+		SupplierID  sql.NullInt64
+		WarehouseID sql.NullInt64
+		Stock       int
+		CreatedBy   *int
+	}{
+		{
+			Code:        "P001",
+			Name:        "Laptop",
+			CategoryID:  sql.NullInt64{Int64: 1, Valid: true},
+			SupplierID:  sql.NullInt64{Int64: 1, Valid: true},
+			WarehouseID: sql.NullInt64{Int64: 1, Valid: true},
+			Stock:       10,
+			CreatedBy:   &createdBy,
+		},
+		{
+			Code:        "P002",
+			Name:        "Keyboard",
+			CategoryID:  sql.NullInt64{Int64: 1, Valid: true},
+			SupplierID:  sql.NullInt64{Int64: 1, Valid: true},
+			WarehouseID: sql.NullInt64{Int64: 1, Valid: true},
+			Stock:       15,
+			CreatedBy:   &createdBy,
+		},
+		{
+			Code:        "P003",
+			Name:        "Mouse",
+			CategoryID:  sql.NullInt64{Int64: 1, Valid: true},
+			SupplierID:  sql.NullInt64{Int64: 1, Valid: true},
+			WarehouseID: sql.NullInt64{Int64: 1, Valid: true},
+			Stock:       20,
+			CreatedBy:   &createdBy,
+		},
+		{
+			Code:        "P004",
+			Name:        "Monitor",
+			CategoryID:  sql.NullInt64{Int64: 1, Valid: true},
+			SupplierID:  sql.NullInt64{Int64: 1, Valid: true},
+			WarehouseID: sql.NullInt64{Int64: 1, Valid: true},
+			Stock:       5,
+			CreatedBy:   &createdBy,
+		},
+		{
+			Code:        "P005",
+			Name:        "Printer",
+			CategoryID:  sql.NullInt64{Int64: 1, Valid: true},
+			SupplierID:  sql.NullInt64{Int64: 1, Valid: true},
+			WarehouseID: sql.NullInt64{Int64: 1, Valid: true},
+			Stock:       8,
+			CreatedBy:   &createdBy,
+		},
 	}
 
-	tx := db.MustBegin()
+	tx, err := db.Beginx()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to start transaction: " + err.Error()})
+		return
+	}
+	defer tx.Rollback()
 
 	for _, p := range products {
 		_, err := tx.Exec(`
-            INSERT INTO products (code, name, category_id, supplier_id, warehouse_id, stock, created_by) 
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
-            ON CONFLICT (code) DO NOTHING`,
-			p.Code, p.Name, p.CategoryID, p.SupplierID, p.WarehouseID, p.Stock, p.CreatedBy,
+			INSERT INTO products (code, name, category_id, supplier_id, warehouse_id, stock, created_by) 
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (code) DO NOTHING`,
+			p.Code,
+			p.Name,
+			p.CategoryID,
+			p.SupplierID,
+			p.WarehouseID,
+			p.Stock,
+			p.CreatedBy,
 		)
 		if err != nil {
-			tx.Rollback()
-			c.JSON(500, gin.H{"error": err.Error()})
+			c.JSON(500, gin.H{"error": "Failed to insert product " + p.Code + ": " + err.Error()})
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": "Failed to commit transaction: " + err.Error()})
 		return
 	}
 
@@ -658,15 +719,18 @@ func GetProducts(c *gin.Context) {
 
 	// Create a response struct to properly format the output
 	type ProductResponse struct {
-		ID       int      `json:"id"`
-		Code     string   `json:"code"`
-		Name     string   `json:"item"`
-		ItemCode string   `json:"item_code"`
-		Hold     string   `json:"hold"`
-		Stock    int      `json:"quantity"`
-		Price    float64  `json:"price"`
-		ImageURL string   `json:"image"`
-		Vehicles []string `json:"vehicles"`
+		ID          int      `json:"id"`
+		Code        string   `json:"code"`
+		Name        string   `json:"item"`
+		ItemCode    string   `json:"item_code"`
+		Hold        string   `json:"hold"`
+		Stock       int      `json:"quantity"`
+		Price       float64  `json:"price"`
+		ImageURL    string   `json:"image"`
+		CategoryID  *int     `json:"category_id,omitempty"`
+		SupplierID  *int     `json:"supplier_id,omitempty"`
+		WarehouseID *int     `json:"warehouse_id,omitempty"`
+		Vehicles    []string `json:"vehicles"`
 	}
 
 	productMap := make(map[int]*ProductResponse)
@@ -676,9 +740,9 @@ func GetProducts(c *gin.Context) {
 			id          int
 			code        string
 			name        string
-			categoryID  int
-			supplierID  int
-			warehouseID int
+			categoryID  sql.NullInt64
+			supplierID  sql.NullInt64
+			warehouseID sql.NullInt64
 			stock       int
 			price       float64
 			hold        sql.NullString
@@ -713,7 +777,7 @@ func GetProducts(c *gin.Context) {
 
 		p, exists := productMap[id]
 		if !exists {
-			// Convert NULL values to empty strings
+			// Convert NULL values to empty strings or nil pointers
 			holdStr := ""
 			if hold.Valid {
 				holdStr = hold.String
@@ -729,16 +793,38 @@ func GetProducts(c *gin.Context) {
 				imageURLStr = imageURL.String
 			}
 
+			// Handle nullable IDs
+			var catID *int
+			if categoryID.Valid {
+				idVal := int(categoryID.Int64)
+				catID = &idVal
+			}
+
+			var supID *int
+			if supplierID.Valid {
+				idVal := int(supplierID.Int64)
+				supID = &idVal
+			}
+
+			var whID *int
+			if warehouseID.Valid {
+				idVal := int(warehouseID.Int64)
+				whID = &idVal
+			}
+
 			p = &ProductResponse{
-				ID:       id,
-				Code:     code,
-				Name:     name,
-				ItemCode: itemCodeStr,
-				Hold:     holdStr,
-				Stock:    stock,
-				Price:    price,
-				ImageURL: imageURLStr,
-				Vehicles: []string{},
+				ID:          id,
+				Code:        code,
+				Name:        name,
+				ItemCode:    itemCodeStr,
+				Hold:        holdStr,
+				Stock:       stock,
+				Price:       price,
+				ImageURL:    imageURLStr,
+				CategoryID:  catID,
+				SupplierID:  supID,
+				WarehouseID: whID,
+				Vehicles:    []string{},
 			}
 			productMap[id] = p
 		}
@@ -1803,10 +1889,39 @@ func CreateQuotation(c *gin.Context) {
 // CreateReceipt - Main function for creating receipts with items
 func CreateReceipt(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
-	userID := c.GetInt("user_id")
+
+	// Get user ID from context - use the same pattern as your auth middleware
+	// Option 1: If user_id is stored as interface{}
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(401, gin.H{"error": "Unauthorized - user not found in context"})
+		return
+	}
+
+	// Convert to int properly
+	var userID int
+	switch v := userIDInterface.(type) {
+	case int:
+		userID = v
+	case int64:
+		userID = int(v)
+	case float64:
+		userID = int(v)
+	case string:
+		// If stored as string, convert it
+		id, err := strconv.Atoi(v)
+		if err != nil {
+			c.JSON(401, gin.H{"error": "Invalid user ID format"})
+			return
+		}
+		userID = id
+	default:
+		c.JSON(401, gin.H{"error": "User ID has invalid type"})
+		return
+	}
 
 	if userID == 0 {
-		c.JSON(401, gin.H{"error": "Unauthorized - user not found"})
+		c.JSON(401, gin.H{"error": "Unauthorized - invalid user ID"})
 		return
 	}
 

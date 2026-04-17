@@ -1,4 +1,5 @@
 -- Drop in correct order to avoid FK conflicts (child tables first)
+DROP TABLE IF EXISTS file_attachments CASCADE;
 DROP TABLE IF EXISTS receipt_items CASCADE;
 DROP TABLE IF EXISTS receipts CASCADE;
 DROP TABLE IF EXISTS invoices CASCADE;
@@ -289,12 +290,21 @@ WHERE p.code IN ('P003', 'P004', 'P005', 'P008', 'P009', 'P012', 'P013')
   AND v.name IN ('Toyota Hilux', 'Ford Ranger', 'Nissan Navara', 'Toyota Prius', 'Toyota Aqua', 'Toyota Hiace')
 ON CONFLICT DO NOTHING;
 
--- Update sequences after manual inserts (MOVED TO THE END)
-SELECT setval('categories_id_seq', (SELECT MAX(id) FROM categories));
-SELECT setval('suppliers_id_seq', (SELECT MAX(id) FROM suppliers));
-SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
-SELECT setval('warehouses_id_seq', (SELECT MAX(id) FROM warehouses));
-SELECT setval('vehicles_id_seq', (SELECT MAX(id) FROM vehicles));
-SELECT setval('products_id_seq', (SELECT MAX(id) FROM products));
-SELECT setval('customers_id_seq', (SELECT MAX(id) FROM customers));
-SELECT setval('receipts_id_seq', (SELECT MAX(id) FROM receipts));
+-- Update sequences after manual inserts
+SELECT setval('categories_id_seq', COALESCE((SELECT MAX(id) FROM categories), 1));
+SELECT setval('suppliers_id_seq', COALESCE((SELECT MAX(id) FROM suppliers), 1));
+SELECT setval('users_id_seq', COALESCE((SELECT MAX(id) FROM users), 1));
+SELECT setval('warehouses_id_seq', COALESCE((SELECT MAX(id) FROM warehouses), 1));
+SELECT setval('vehicles_id_seq', COALESCE((SELECT MAX(id) FROM vehicles), 1));
+SELECT setval('products_id_seq', COALESCE((SELECT MAX(id) FROM products), 1));
+SELECT setval('customers_id_seq', COALESCE((SELECT MAX(id) FROM customers), 1));
+SELECT setval('receipts_id_seq', COALESCE((SELECT MAX(id) FROM receipts), 1));
+SELECT setval('receipt_items_id_seq', COALESCE((SELECT MAX(id) FROM receipt_items), 1));
+SELECT setval('file_attachments_id_seq', COALESCE((SELECT MAX(id) FROM file_attachments), 1));
+
+-- Verify all tables were created
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public' 
+  AND table_type = 'BASE TABLE'
+ORDER BY table_name;
