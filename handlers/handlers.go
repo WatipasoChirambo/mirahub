@@ -562,7 +562,7 @@ func Login(c *gin.Context) {
 		86400, // 24 hours in seconds
 		"/",
 		"",
-		false, // httpOnly - set to false so JS can read it (or true for security)
+		false, // httpOnly - set to false so JS can read it
 		true,  // secure - set to true in production with HTTPS
 	)
 
@@ -585,8 +585,20 @@ func Login(c *gin.Context) {
 }
 
 func Logout(c *gin.Context) {
+	// Clear the token cookie
 	c.SetCookie(
 		"token",
+		"",
+		-1,
+		"/",
+		"",
+		false,
+		true,
+	)
+
+	// Clear the user_id cookie
+	c.SetCookie(
+		"user_id",
 		"",
 		-1,
 		"/",
@@ -601,6 +613,23 @@ func Logout(c *gin.Context) {
 }
 
 // -------------------- Middleware --------------------
+
+// CORSMiddleware handles CORS settings
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000") // Your frontend URL
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -685,6 +714,34 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// DebugAuth endpoint for testing authentication
+func DebugAuth(c *gin.Context) {
+	userID := c.GetInt("user_id")
+	username := c.GetString("username")
+	role := c.GetString("role")
+
+	// Get cookies for debugging
+	tokenCookie, _ := c.Cookie("token")
+	userIDCookie, _ := c.Cookie("user_id")
+
+	c.JSON(200, gin.H{
+		"authenticated":      userID != 0,
+		"user_id":            userID,
+		"username":           username,
+		"role":               role,
+		"token_cookie":       tokenCookie != "",
+		"token_cookie_value": tokenCookie[:min(20, len(tokenCookie))] + "...",
+		"user_id_cookie":     userIDCookie,
+	})
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // TestProducts - Debug endpoint

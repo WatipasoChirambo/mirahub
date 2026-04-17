@@ -60,7 +60,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		// public.GET("/suppliers", handlers.GetSuppliers)
 		// public.GET("/warehouses", handlers.GetWarehouses)
 	}
-
+	r.Use(handlers.CORSMiddleware())
 	// Authenticated routes
 	api := r.Group("/api")
 	// 🔒 Protected routes
