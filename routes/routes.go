@@ -33,7 +33,6 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 
 		// Quotations
 		public.POST("/quotations", handlers.CreateQuotation)
-		public.GET("/quotations", handlers.GetQuotations)
 
 		public.GET("/vehicles", handlers.GetVehicles)
 		public.GET("/vehicle/:id", handlers.GetVehicle)
@@ -125,6 +124,8 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 
 		// Update quotation status (draft, sent, accepted, rejected, expired)
 		protected.PUT("/quotations/:id/status", handlers.UpdateQuotationStatus)
+
+		protected.GET("/quotations", handlers.GetQuotations)
 
 		// ========== NEW: Enhanced Document Routes with File Support ==========
 
