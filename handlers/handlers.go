@@ -2407,13 +2407,13 @@ type CreateSaleRequest struct {
 
 func GetCategories(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
-	rows, _ := db.Query("SELECT id, name FROM categories")
+	rows, _ := db.Query("SELECT id, name, description FROM categories")
 	defer rows.Close()
 
 	var list []models.Category
 	for rows.Next() {
 		var m models.Category
-		rows.Scan(&m.ID, &m.Name)
+		rows.Scan(&m.ID, &m.Name, &m.Description)
 		list = append(list, m)
 	}
 	c.JSON(http.StatusOK, gin.H{"categories": list})
@@ -2423,7 +2423,7 @@ func CreateCategory(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
 	var m models.Category
 	c.ShouldBindJSON(&m)
-	db.Exec("INSERT INTO categories(name) VALUES($1)", m.Name)
+	db.Exec("INSERT INTO categories(name, description) VALUES($1, $2)", m.Name, m.Description)
 	c.JSON(http.StatusCreated, gin.H{"message": "created"})
 }
 
@@ -2432,7 +2432,7 @@ func UpdateCategory(c *gin.Context) {
 	id := c.Param("id")
 	var m models.Category
 	c.ShouldBindJSON(&m)
-	db.Exec("UPDATE categories SET name=$1 WHERE id=$2", m.Name, id)
+	db.Exec("UPDATE categories SET name=$1, description=$2 WHERE id=$3", m.Name, m.Description, id)
 	c.JSON(http.StatusOK, gin.H{"message": "updated"})
 }
 
