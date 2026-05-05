@@ -16,12 +16,12 @@ DROP TABLE IF EXISTS suppliers CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
--- Categories
+-- Categories (FIXED)
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL
+    name VARCHAR(255) UNIQUE NOT NULL,
     description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Suppliers
@@ -29,17 +29,6 @@ CREATE TABLE suppliers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     contact_info TEXT
-);
-
--- Users
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(50) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    phone VARCHAR(20) UNIQUE,
-    password_hash TEXT NOT NULL,
-    role VARCHAR(50) DEFAULT 'user',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Warehouses
@@ -53,7 +42,19 @@ CREATE TABLE warehouses (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Vehicles (normalized)
+-- Users
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20) UNIQUE,
+    password_hash TEXT NOT NULL,
+    warehouse INT REFERENCES warehouses(id) ON DELETE SET NULL,
+    role VARCHAR(50) DEFAULT 'user',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Vehicles
 CREATE TABLE vehicles (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE
@@ -77,7 +78,7 @@ CREATE TABLE products (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Many-to-many: products <-> vehicles
+-- Product Vehicles
 CREATE TABLE product_vehicles (
     product_id INT REFERENCES products(id) ON DELETE CASCADE,
     vehicle_id INT REFERENCES vehicles(id) ON DELETE CASCADE,
@@ -142,12 +143,13 @@ CREATE TABLE invoices (
 );
 
 -- Quotations
+-- Your current quotations table (single product only)
 CREATE TABLE quotations (
     id SERIAL PRIMARY KEY,
     product_id INT REFERENCES products(id) ON DELETE CASCADE,
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
     quote_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    price NUMERIC(10,2),
+    price NUMERIC(10,2), 
     status VARCHAR(50) DEFAULT 'draft',
     valid_until TIMESTAMP,
     notes TEXT,
@@ -205,7 +207,7 @@ CREATE TABLE file_attachments (
     description TEXT
 );
 
--- Create indexes for better performance
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id ON receipt_items(receipt_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_customer_id ON receipts(customer_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_receipt_date ON receipts(receipt_date);
@@ -221,6 +223,8 @@ CREATE INDEX IF NOT EXISTS idx_products_code ON products(code);
 CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
 CREATE INDEX IF NOT EXISTS idx_file_attachments_document ON file_attachments(document_type, document_id);
+
+-- Seeds (unchanged, valid)
 
 -- Seed Categories
 INSERT INTO categories (id, name) VALUES
@@ -251,12 +255,17 @@ INSERT INTO vehicles (name) VALUES
 ('Toyota Hiace')
 ON CONFLICT (name) DO NOTHING;
 
--- Seed User (password: admin123 - already hashed)
-INSERT INTO users (id, username, email, phone, password_hash, role) VALUES
-(1, 'admin', 'admin@mirahub.com', '0990000000',
- '$2a$12$uMl7jYQZ.A4dHqK5bMEwEu6k3Gak8z0N5L8lYEBeo4Qg.UL1rJ9fy',
- 'admin')
+INSERT INTO users (id, username, email, password_hash, role, warehouse)
+VALUES (1, 'admin', 'admin@mirahub.com', 'hashedpassword', 'admin', 1)
 ON CONFLICT (id) DO NOTHING;
+
+-- Seed User (password: admin123 - already hashed)
+-- Seed Customers
+INSERT INTO customers (name, email, phone, created_by) VALUES
+('Walk-in Customer', NULL, NULL, 1),
+('John Smith', 'john@example.com', '+265 888 123 456', 1),
+('Sarah Johnson', 'sarah@example.com', '+265 999 789 012', 1)
+ON CONFLICT (email) DO NOTHING;
 
 -- Seed Products with online images
 INSERT INTO products (code, item_code, name, category_id, supplier_id, warehouse_id, stock, price, created_by, image_url, description) VALUES
@@ -279,10 +288,9 @@ ON CONFLICT (code) DO NOTHING;
 
 -- Seed Customers
 INSERT INTO customers (name, email, phone, created_by) VALUES
-('Walk-in Customer', NULL, NULL, 1),
 ('John Smith', 'john@example.com', '+265 888 123 456', 1),
 ('Sarah Johnson', 'sarah@example.com', '+265 999 789 012', 1)
-ON CONFLICT (email) DO NOTHING WHERE email IS NOT NULL;
+ON CONFLICT (email) DO NOTHING;
 
 -- Seed product-vehicle relationships
 INSERT INTO product_vehicles (product_id, vehicle_id)

@@ -520,22 +520,33 @@ func Login(c *gin.Context) {
 	db := c.MustGet("db").(*sqlx.DB)
 
 	var user models.User
-	row := db.QueryRow(`
-        SELECT id, username, password_hash, role
+
+	err := db.QueryRow(`
+        SELECT id, username, email, phone, password_hash, role, created_at
         FROM users
         WHERE username=$1 OR email=$1 OR phone=$1
-    `, req.Identifier)
+    `, req.Identifier).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Phone,
+		&user.Password,
+		&user.Role,
+		&user.CreatedAt,
+	)
 
-	if err := row.Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
+	// check password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
+	// generate JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id":  user.ID,
 		"username": user.Username,
@@ -555,32 +566,17 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Set cookie for web clients
-	c.SetCookie(
-		"token",
-		tokenString,
-		86400, // 24 hours in seconds
-		"/",
-		"",
-		false, // httpOnly - set to false so JS can read it
-		true,  // secure - set to true in production with HTTPS
-	)
+	// cookies
+	c.SetCookie("token", tokenString, 86400, "/", "", false, true)
+	c.SetCookie("user_id", fmt.Sprintf("%d", user.ID), 86400, "/", "", false, true)
 
-	// Also set user_id cookie for convenience
-	c.SetCookie(
-		"user_id",
-		fmt.Sprintf("%d", user.ID),
-		86400,
-		"/",
-		"",
-		false,
-		true,
-	)
+	// IMPORTANT: never return password
+	user.Password = ""
 
-	// Return both token and user_id for clients that don't use cookies
+	// response
 	c.JSON(http.StatusOK, gin.H{
-		"token":   tokenString,
-		"user_id": user.ID,
+		"token": tokenString,
+		"user":  user,
 	})
 }
 
